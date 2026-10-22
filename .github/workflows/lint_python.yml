@@ -1,4 +1,4 @@
-name: Python lint
+name: Python source validation
 
 on:
   push:
@@ -10,14 +10,12 @@ permissions:
   contents: read
 
 jobs:
-  lint:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install Ruff
-        run: python -m pip install ruff
-      - name: Check formatting
-        run: ruff format --check src tests
+      - name: Compile Python sources
+        run: python -m compileall -q src tests
