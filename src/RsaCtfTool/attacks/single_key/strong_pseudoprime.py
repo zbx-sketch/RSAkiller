@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+from RsaCtfTool.attacks.abstract_attack import AbstractAttack
+from RsaCtfTool.lib.exceptions import FactorizationError
+from RsaCtfTool.lib.algos import strong_pseudoprime
+
+
+class Attack(AbstractAttack):
+    def __init__(self, timeout=60):
+        super().__init__(timeout)
+        self.speed = AbstractAttack.speed_enum["medium"]
+
+    def attack(self, publickey, cipher=[], progress=True):
+        """Run strong_pseudoprime attack with a timeout"""
+        try:
+            r = strong_pseudoprime(publickey.n)
+            if r is None:
+                return None, None
+            publickey.p, publickey.q = r
+
+        except FactorizationError:
+            self.logger.error("N should not be a 4k+2 number...")
+            return None, None
+
+        return self.create_private_key(publickey)
+
+    def test(self):
+        from RsaCtfTool.lib.crypto_wrapper import RSA
+        from RsaCtfTool.lib.keys_wrapper import PublicKey
+
+        key_data = RSA.construct((13 * 31, 17)).publickey().exportKey()
+        result = self.attack(PublicKey(key_data), progress=False)
+        return result != (None, None)

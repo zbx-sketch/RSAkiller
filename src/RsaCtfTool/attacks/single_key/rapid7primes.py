@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+from pathlib import Path
+from tqdm import tqdm
+from RsaCtfTool.attacks.abstract_attack import AbstractAttack
+from RsaCtfTool.lib.keys_wrapper import PrivateKey
+from RsaCtfTool.lib.number_theory import is_divisible
+from RsaCtfTool.lib.pickling import decompress_pickle
+
+
+class Attack(AbstractAttack):
+    def __init__(self, timeout=60):
+        super().__init__(timeout)
+        self.speed = AbstractAttack.speed_enum["fast"]
+
+    def attack(self, publickey, cipher=[], progress=True):
+        """Search for rapid7 gcd primes"""
+        data_dir = Path(__file__).resolve().parents[2] / "data"
+        for txtfile in data_dir.glob("*.pkl.bz2"):
+            self.logger.info(f"[+] loading prime list file {txtfile}...")
+            # primes = sorted([int(l.rstrip()) for l in open(txtfile,"r").readlines()])
+            primes = decompress_pickle(txtfile)
+            for prime in tqdm(primes, disable=(not progress)):
+                if is_divisible(publickey.n, prime):
+                    publickey.q = prime
+                    publickey.p = publickey.n // publickey.q
+                    priv_key = PrivateKey(
+                        int(publickey.p),
+                        int(publickey.q),
+                        int(publickey.e),
+                        int(publickey.n),
+                    )
+                    return priv_key, None
+        return None, None
+
+    def test(self):
+        from RsaCtfTool.lib.keys_wrapper import PublicKey
+
+        key_data = """-----BEGIN PUBLIC KEY-----
+MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDEUCMPvSGioBgCAD3j1ZTNOiHQ
+wu4Kv8DSTBm2NgwZGQD0hjoQR7HQz5VtVoYnomtcM9Nv4RmG0eSyiH6RQ2jRSBRv
+ENq6t4qAHJYpCkRKVvoILiXklsfAFMMjd+u3qDQoEinztzMydkdGOTe/HafCnD6r
+1FV+zN3cw0ykBw2C9wIDAQAB
+-----END PUBLIC KEY-----"""
+        result = self.attack(PublicKey(key_data), progress=False)
+        return result != (None, None)

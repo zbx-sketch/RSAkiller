@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "RSAkiller"
+version = "0.1.0"
+description = "RSA multi attacks tool"
+readme = {file = "README.md", content-type = "text/markdown"}
+license = {text = "See LICENSE.txt and file-level notices; upstream terms vary"}
+authors = [
+    {name = "Ganapati and contributors", email = "clavijodario@gmail.com"},
+]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Development Status :: 1 - Planning",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python",
+    "Operating System :: OS Independent",
+    "Topic :: Security :: Cryptography",
+]
+dependencies = [
+    "cryptography>=39",
+    "urllib3>=1.26",
+    "requests>=2.25",
+    "gmpy2>=2.1.15",
+    "pycryptodome>=3.10",
+    "tqdm",
+    "z3-solver",
+    "psutil>=5.9",
+    "factordb-pycli",
+]
+
+[project.urls]
+Homepage = "https://github.com/zbx-sketch/RSAkiller"
+Download = "https://github.com/zbx-sketch/RSAkiller/archive/refs/tags/v0.1.0.tar.gz"
+
+[project.optional-dependencies]
+# SageMath is not pip-installable; install it separately if needed
+optional = ["wolframalpha"]
+dev = ["pytest", "ruff"]
+
+[project.scripts]
+rsacrack = "RsaCtfTool.main:main"
+RsaCtfTool = "RsaCtfTool.main:main"
+RSAkiller = "RsaCtfTool.main:main"
+rsactftool-web = "RsaCtfTool.web:main"
+rsakiller-web = "RsaCtfTool.web:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+RsaCtfTool = ["data/*", "sage/*", "web_ui.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "attack: integration tests that invoke attack backends",
+    "network: tests that require external network access",
+    "slow: computationally expensive tests",
+]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.format]
+# Black-compatible formatting
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"

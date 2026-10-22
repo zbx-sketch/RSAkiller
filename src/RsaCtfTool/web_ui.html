@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>RsaCtfTool · 本机工作台</title>
+  <style>
+    :root{font-family:Inter,"Segoe UI","Microsoft YaHei",sans-serif;color:#e8eef5;background:#0c1118;font-synthesis:none;text-rendering:optimizeLegibility;--muted:#95a3b3;--line:#263442;--panel:#121a23;--accent:#79e1be;--accent-dark:#0f302b;--warning:#f4c56d}
+    *{box-sizing:border-box}body{margin:0;min-width:320px;background:radial-gradient(ellipse at 78% -10%,#14332f 0,transparent 35%),#0c1118;color:#e8eef5}
+    header{height:66px;border-bottom:1px solid #1f2b36;display:flex;align-items:center;justify-content:space-between;padding:0 max(24px,calc((100vw - 1160px)/2));background:#0c1118cc}
+    .brand{display:flex;align-items:center;gap:11px;font-weight:700;letter-spacing:.2px}.mark{width:30px;height:30px;border-radius:9px;background:#173b34;color:var(--accent);display:grid;place-items:center;font-size:14px}.brand span:last-child{color:#92a3b4;font-weight:500}
+    .local-pill{border:1px solid #285146;color:var(--accent);border-radius:99px;padding:6px 10px;font:600 11px ui-monospace,monospace;letter-spacing:.8px}
+    main{max-width:1160px;margin:0 auto;padding:54px 24px 72px}.intro{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:30px}.eyebrow{color:var(--accent);font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase}.intro h1{font-size:clamp(29px,4vw,43px);letter-spacing:-1.5px;margin:10px 0 8px}.intro p{color:var(--muted);margin:0;max-width:660px;line-height:1.65;font-size:14px}.version{font:12px ui-monospace,monospace;color:#7e91a3;white-space:nowrap;padding-bottom:5px}
+    .layout{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(340px,.9fr);gap:18px;align-items:start}.card{border:1px solid var(--line);background:linear-gradient(145deg,#141e28,#111821);border-radius:16px;overflow:hidden}.card-head{padding:20px 22px;border-bottom:1px solid #22303b;display:flex;align-items:center;gap:12px}.step{width:25px;height:25px;border-radius:8px;background:#1e302f;color:var(--accent);display:grid;place-items:center;font:700 12px ui-monospace,monospace}.card-head h2{font-size:15px;margin:0}.card-body{padding:22px}.field{margin:0 0 19px}.field:last-child{margin-bottom:0}.label-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:8px}.label-row label,.field>label{font-size:13px;font-weight:650;color:#d9e1e8}.hint{font-size:11px;color:#8797a7;line-height:1.5}.segmented{display:flex;background:#0d141b;border:1px solid #273641;border-radius:10px;padding:4px;gap:4px}.segmented label{flex:1;position:relative}.segmented input{position:absolute;opacity:0;pointer-events:none}.segmented span{display:block;text-align:center;padding:9px 10px;color:#9aa8b5;border-radius:7px;font-size:12px;cursor:pointer}.segmented input:checked+span{background:#25352f;color:#b9f4df;box-shadow:inset 0 0 0 1px #35564a}.segmented input:focus-visible+span{outline:2px solid var(--accent)}
+    input[type=text],input[type=number],textarea,select{width:100%;border:1px solid #2b3b47;background:#0c131a;color:#e8eef5;border-radius:9px;padding:11px 12px;font:13px ui-monospace,Consolas,monospace;outline:none}input:focus,textarea:focus,select:focus{border-color:#64c9a8;box-shadow:0 0 0 3px #58bd9820}input::placeholder,textarea::placeholder{color:#596a79}textarea{resize:vertical;min-height:112px;line-height:1.55}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}.file-box{position:relative;border:1px dashed #40515e;border-radius:10px;padding:14px;background:#0d151c;transition:.15s}.file-box:hover{border-color:#6abda0}.file-box input{width:100%;color:#9babba;font-size:12px}.file-note{margin-top:8px;color:#7d8d9b;font-size:11px;line-height:1.5}.divider{height:1px;background:#23303b;margin:20px 0}.advanced{border-top:1px solid #24313c;margin-top:19px;padding-top:16px}.advanced summary{font-size:12px;color:#afbdc9;cursor:pointer;user-select:none}.advanced summary::marker{color:var(--accent)}.advanced-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-top:15px}.advanced-grid .field{margin:0}.advanced-grid label{font-size:11px;color:#aebac5;display:block;margin-bottom:6px}.advanced-grid input{padding:9px;font-size:12px}
+    .notice{display:flex;gap:10px;border:1px solid #46502f;background:#242318;border-radius:10px;padding:12px 13px;color:#d7c68f;font-size:11px;line-height:1.55;margin-top:14px}.notice .icon{color:var(--warning);font-weight:800}.hidden{display:none!important}.attack-picker{margin-top:12px}.attack-picker select{height:135px;padding:7px}.attack-picker option{padding:4px}.attack-count{font:11px ui-monospace,monospace;color:#8293a2}
+    .smart-panel{border:1px solid #2d443f;background:#0d171a;border-radius:12px;padding:15px}.challenge-text{min-height:255px}.smart-meta{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:12px;align-items:end;margin-top:12px}.smart-capabilities{color:#8fa49f;font-size:11px;line-height:1.65}.smart-capabilities strong{color:#bfead9;font-weight:650}.char-count{font:11px ui-monospace,monospace;color:#778a96}.compact-file{margin-top:11px;padding:10px 12px}.compact-file input{font-size:11px}.mode-note{margin:9px 0 0;color:#7f928f;font-size:11px;line-height:1.6}
+    .actions{display:flex;align-items:center;gap:12px;margin-top:22px}.primary{border:0;border-radius:10px;background:var(--accent);color:#09221b;font-weight:750;font-size:13px;padding:12px 18px;cursor:pointer;transition:.15s}.primary:hover{background:#9aefd2;transform:translateY(-1px)}.primary:disabled{opacity:.45;cursor:wait;transform:none}.microcopy{font-size:11px;color:#7f8f9d;line-height:1.5}
+    .result-card{position:sticky;top:18px;min-height:450px}.result-card .card-body{padding:0}.empty{padding:67px 28px;text-align:center}.empty-icon{width:46px;height:46px;border-radius:14px;border:1px solid #30414e;background:#17222c;margin:0 auto 17px;display:grid;place-items:center;color:#8ea1b2;font-size:20px}.empty h3{font-size:14px;margin:0 0 7px}.empty p{max-width:270px;margin:auto;color:#82919e;font-size:12px;line-height:1.65}.result-top{padding:16px 20px;border-bottom:1px solid #24313c;display:flex;align-items:center;justify-content:space-between;gap:12px}.status{display:flex;align-items:center;gap:8px;font-size:12px;color:#afbdc8}.dot{width:8px;height:8px;border-radius:50%;background:#738291}.dot.running{background:#edc46e;box-shadow:0 0 0 4px #edc46e20;animation:pulse 1.3s infinite}.dot.finished{background:var(--accent)}.dot.error{background:#fa7979}.result-buttons{display:flex;gap:7px}.subtle{border:1px solid #33424f;background:#151e27;color:#b7c4ce;border-radius:7px;padding:6px 9px;font-size:11px;cursor:pointer}.subtle:hover{border-color:#587062;color:#d8efe5}.subtle:disabled{opacity:.55;cursor:wait}.danger{border-color:#633f44;color:#f2a7a7}.danger:hover{border-color:#a65b63;color:#ffd3d3}.output{padding:18px 20px;min-height:370px;max-height:65vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:#c7d2dc;font:12px/1.65 ui-monospace,Consolas,monospace}.output:empty::before{content:"等待任务输出…";color:#617181}.exit-label{font:11px ui-monospace,monospace;color:#8494a1}.truncate{padding:0 20px 16px;color:#d3b977;font-size:11px}
+    footer{max-width:1160px;margin:0 auto;padding:0 24px 28px;color:#6f808f;font-size:11px;display:flex;justify-content:space-between;gap:15px}footer a{color:#88cdb2;text-decoration:none}
+    @keyframes pulse{50%{box-shadow:0 0 0 7px #edc46e10}}@media(max-width:850px){main{padding-top:38px}.layout{grid-template-columns:1fr}.result-card{position:static;min-height:300px}.output{min-height:250px;max-height:50vh}.intro{align-items:flex-start;flex-direction:column;gap:8px}}@media(max-width:520px){header{padding:0 16px}.local-pill{font-size:9px}main{padding:30px 14px 45px}.card-body{padding:17px}.card-head{padding:17px}.two-col,.advanced-grid,.smart-meta{grid-template-columns:1fr}.intro h1{font-size:31px}.version{display:none}footer{padding:0 14px 22px;flex-direction:column}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand"><span class="mark">RSA</span><span>RsaCtfTool</span><span>/ 工作台</span></div>
+    <div class="local-pill">● &nbsp;LOCAL ONLY</div>
+  </header>
+  <main>
+    <section class="intro">
+      <div><div class="eyebrow">RSA · CTF TOOLKIT</div><h1>粘贴题目，一键分析。</h1><p>直接粘贴题面、输出或 Python 源码，工具会安全提取参数、判断攻击路径、恢复明文并做闭环验证；需要精细控制时再切换手动高级模式。</p></div>
+      <div class="version">BROWSER WORKBENCH&nbsp; / &nbsp;LOCAL</div>
+    </section>
+    <div class="layout">
+      <section class="card">
+        <div class="card-head"><span class="step">01</span><h2>配置任务</h2></div>
+        <div class="card-body">
+          <form id="task-form">
+            <div class="field">
+              <div class="label-row"><label>解题方式</label><span class="hint">新手建议使用智能粘贴</span></div>
+              <div class="segmented" role="group" aria-label="解题方式">
+                <label><input type="radio" name="workflow_mode" value="smart" checked><span>智能粘贴（一键）</span></label>
+                <label><input type="radio" name="workflow_mode" value="manual"><span>手动高级</span></label>
+              </div>
+              <p class="mode-note">智能模式只读取数字、变量名和公钥元组，不会执行你粘贴的题目代码。</p>
+            </div>
+            <div id="smart-panel" class="smart-panel">
+              <div class="label-row"><label for="challenge-text">题目文本 / 源码 / 输出</label><span id="challenge-count" class="char-count">0 / 1,000,000</span></div>
+              <textarea id="challenge-text" class="challenge-text" maxlength="1000000" spellcheck="false" placeholder="把整段题目直接粘贴到这里，例如：&#10;n = ...&#10;e = 65537&#10;c = ...&#10;&#10;也支持多组 n1/c1、p/q、dp/dq、{n,e}、Python 2 的 0x...L，以及题目生成源码。"></textarea>
+              <div class="file-box compact-file"><input id="challenge-file" type="file" accept=".txt,.py,.md,.log,text/plain,text/markdown"><div class="file-note">也可选择本地 .txt / .py / .md 文件（最多 1 MiB），内容会填入上方文本框。</div></div>
+              <div class="smart-meta">
+                <div class="smart-capabilities"><strong>自动处理：</strong>直接开根、共模、广播、共享素数、dp 泄漏、已知 p/q、相邻素数、光滑 p−1、逐字符拼接、五进制和常见 Flag 后处理。</div>
+                <div><div class="label-row"><label for="smart-timeout">总分析时限</label></div><input id="smart-timeout" type="number" min="1" max="3600" value="120"><div class="hint" style="margin-top:6px">复杂题可适当增大。</div></div>
+              </div>
+            </div>
+            <div id="manual-panel" class="hidden">
+            <div class="field">
+              <div class="label-row"><label>公钥输入</label><span class="hint">二选一：文件，或 n + e</span></div>
+              <div class="segmented" role="group" aria-label="公钥输入方式">
+                <label><input type="radio" name="key_mode" value="file" checked><span>上传公钥文件</span></label>
+                <label><input type="radio" name="key_mode" value="numbers"><span>填写 n 和 e</span></label>
+              </div>
+            </div>
+            <div id="key-file-field" class="field">
+              <div class="file-box"><input id="key-file" type="file" accept=".pem,.pub,.key,.txt,application/x-pem-file,text/plain"><div class="file-note">支持 PEM / OpenSSH 公钥文件，文件只交给本机运行的任务处理。</div></div>
+            </div>
+            <div id="numbers-fields" class="field hidden">
+              <div class="two-col">
+                <div><div class="label-row"><label for="n">模数 n</label></div><input id="n" type="text" spellcheck="false" placeholder="例如 0xC34F…"></div>
+                <div><div class="label-row"><label for="e">公钥指数 e</label></div><input id="e" type="text" spellcheck="false" placeholder="通常为 65537；多个值如 17,65537"></div>
+              </div>
+              <div class="hint" style="margin-top:7px">十进制或 0x 开头的十六进制整数。需要同一 n 下运行多密钥攻击时，可用英文逗号填写多个 e，例如 <code>17,65537</code>，并在下方使用对应数量的密文。</div>
+            </div>
+            <div class="divider"></div>
+            <div class="field">
+              <div class="label-row"><label>要做什么</label></div>
+              <div class="segmented" role="group" aria-label="任务类型">
+                <label><input type="radio" name="mode" value="recover" checked><span>尝试恢复私钥</span></label>
+                <label><input type="radio" name="mode" value="decrypt"><span>尝试解密</span></label>
+              </div>
+            </div>
+            <div id="cipher-field" class="field hidden">
+              <div class="label-row"><label for="ciphertext">密文</label><span class="hint">十进制 / 0x 十六进制 / Base64</span></div>
+              <textarea id="ciphertext" placeholder="粘贴密文；多个密文可用英文逗号分隔"></textarea>
+              <label class="hint" style="display:flex;align-items:center;gap:8px;margin-top:9px"><input id="show-private" type="checkbox" style="accent-color:#79e1be">同时显示恢复出的私钥</label>
+            </div>
+            <div class="field">
+              <div class="label-row"><label for="attack-mode">攻击方式</label><span id="attack-count" class="attack-count"></span></div>
+              <select id="attack-mode">
+                <option value="local">推荐：本地攻击（不调用在线分解服务）</option>
+                <option value="all">全部攻击（可能连接外部服务）</option>
+                <option value="custom">自选攻击方式</option>
+              </select>
+              <div class="hint" style="margin-top:7px">“推荐”和“全部”会根据 n、e、密文数量及专项参数自动调整攻击顺序；“自选”按勾选的攻击执行。</div>
+              <div id="external-notice" class="notice hidden"><span class="icon">!</span><span>“全部攻击”会运行 FactorDB 等在线攻击，模数可能发送给第三方服务。若希望仅在本机分析，请保持推荐选项。</span></div>
+              <div id="attack-picker" class="attack-picker hidden">
+                <select id="attacks" multiple aria-label="自选攻击方式"></select>
+                <div class="hint" style="margin-top:7px">按住 Ctrl（Windows）或 ⌘（Mac）可多选。</div>
+              </div>
+            </div>
+            <div class="two-col field">
+              <div><div class="label-row"><label for="timeout">单次攻击超时</label></div><input id="timeout" type="number" min="1" max="3600" value="60"></div>
+              <div><div class="label-row"><label for="parallel-workers">并行攻击数</label></div><input id="parallel-workers" type="number" min="1" max="10" step="1" value="1"><div class="hint" style="margin-top:6px">1–10；按批次启动独立进程，首个成功后取消同批任务。</div></div>
+            </div>
+            <details class="advanced">
+              <summary>专项攻击参数（按需填写）</summary>
+              <div class="advanced-grid">
+                <div class="field"><label for="fr-a">Franklin-Reiter · a</label><input id="fr-a" type="text" placeholder="十进制或 0x…"></div>
+                <div class="field"><label for="fr-b">Franklin-Reiter · b</label><input id="fr-b" type="text" placeholder="十进制或 0x…"></div>
+                <div class="field"><label for="p-high">partial_p · 已知 p 高位</label><input id="p-high" type="text" placeholder="十进制或 0x…"></div>
+                <div class="field"><label for="p-unknown-bits">partial_p · 未知位数</label><input id="p-unknown-bits" type="number" min="1" placeholder="例如 128"></div>
+                <div class="field"><label for="dp">泄漏的 dp</label><input id="dp" type="text" placeholder="十进制或 0x…"></div>
+                <div class="field"><label for="dq">泄漏的 dq</label><input id="dq" type="text" placeholder="十进制或 0x…"></div>
+                <div class="field"><label for="sm-prefix">已知消息前缀</label><input id="sm-prefix" type="text" placeholder="文本或 0x…"></div>
+                <div class="field"><label for="sm-suffix">已知消息后缀</label><input id="sm-suffix" type="text" placeholder="文本或 0x…"></div>
+                <div class="field"><label for="sm-len">未知消息长度（字节）</label><input id="sm-len" type="number" min="1" placeholder="例如 16"></div>
+              </div>
+              <div class="hint" style="margin-top:12px">填写参数后，还需在上方选择“自选攻击方式”并勾选对应攻击；留空时不传递。</div>
+            </details>
+            </div>
+            <div class="actions"><button id="run-button" class="primary" type="submit">智能解题&nbsp; →</button><span id="run-note" class="microcopy">自动识别、求解并验证；任务只在本机执行。</span></div>
+          </form>
+        </div>
+      </section>
+      <section class="card result-card">
+        <div class="card-head"><span class="step">02</span><h2>运行结果</h2></div>
+        <div class="card-body">
+          <div id="empty-state" class="empty"><div class="empty-icon">⌁</div><h3>等待开始</h3><p>粘贴题目并点击“智能解题”，攻击依据、闭环验证和明文候选会显示在这里。</p></div>
+          <div id="result" class="hidden">
+            <div class="result-top"><div class="status"><span id="status-dot" class="dot"></span><span id="status-text">等待启动</span><span id="exit-label" class="exit-label"></span></div><div class="result-buttons"><button id="stop-button" class="subtle danger hidden" type="button">停止攻击</button><button id="copy-button" class="subtle" type="button">复制</button><button id="save-button" class="subtle" type="button">保存日志</button></div></div>
+            <pre id="output" class="output" aria-live="polite"></pre>
+            <div id="truncate-note" class="truncate hidden">日志达到显示上限，后续内容未保存在界面中。</div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <footer><span>面向 CTF 与学习用途。攻击结果取决于密钥弱点和可用依赖。</span><span>由 <a href="https://github.com/RsaCtfTool/RsaCtfTool" target="_blank" rel="noreferrer">RsaCtfTool</a> 驱动</span></footer>
+  <script>
+    const form = document.getElementById('task-form');
+    const smartPanel = document.getElementById('smart-panel');
+    const manualPanel = document.getElementById('manual-panel');
+    const challengeText = document.getElementById('challenge-text');
+    const keyFileField = document.getElementById('key-file-field');
+    const numbersFields = document.getElementById('numbers-fields');
+    const cipherField = document.getElementById('cipher-field');
+    const attackMode = document.getElementById('attack-mode');
+    const attackPicker = document.getElementById('attack-picker');
+    const attacksSelect = document.getElementById('attacks');
+    const externalNotice = document.getElementById('external-notice');
+    const runButton = document.getElementById('run-button');
+    const stopButton = document.getElementById('stop-button');
+    const output = document.getElementById('output');
+    let latestJob = null;
+    let attackConfig = null;
+
+    function setVisible(element, visible) { element.classList.toggle('hidden', !visible); }
+    function selected(name) { return document.querySelector(`input[name="${name}"]:checked`).value; }
+    function refreshForm() {
+      const workflow = selected('workflow_mode');
+      const keyMode = selected('key_mode');
+      const mode = selected('mode');
+      const strategy = attackMode.value;
+      setVisible(smartPanel, workflow === 'smart');
+      setVisible(manualPanel, workflow === 'manual');
+      setVisible(keyFileField, keyMode === 'file');
+      setVisible(numbersFields, keyMode === 'numbers');
+      setVisible(cipherField, mode === 'decrypt');
+      setVisible(attackPicker, strategy === 'custom');
+      setVisible(externalNotice, strategy === 'all');
+      document.getElementById('attack-count').textContent = strategy === 'custom' ? `${attacksSelect.selectedOptions.length} 项已选` : '';
+      if (!runButton.disabled) runButton.textContent = workflow === 'smart' ? '智能解题  →' : '运行分析  →';
+      document.getElementById('run-note').textContent = workflow === 'smart'
+        ? '自动识别、求解并验证；任务只在本机执行。'
+        : '任务在本机执行，服务只监听 127.0.0.1。';
+    }
+
+    document.querySelectorAll('input[name="workflow_mode"],input[name="key_mode"],input[name="mode"]').forEach((input) => input.addEventListener('change', refreshForm));
+    attackMode.addEventListener('change', refreshForm);
+    attacksSelect.addEventListener('change', refreshForm);
+
+    fetch('/api/attacks').then((response) => response.json()).then((data) => {
+      attackConfig = data;
+      for (const name of data.attacks) {
+        const option = document.createElement('option');
+        option.value = name;
+        const label = data.attack_labels && data.attack_labels[name]
+          ? ` (${data.attack_labels[name]})`
+          : '';
+        option.textContent = name + label + (data.external_attacks.includes(name) ? ' · 在线' : '');
+        attacksSelect.appendChild(option);
+      }
+      document.getElementById('attack-count').textContent = `${data.local_attacks.length} 项本地攻击`;
+    }).catch(() => {
+      document.getElementById('attack-count').textContent = '攻击列表加载失败';
+    });
+
+    function readFileAsBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('无法读取所选文件。'));
+        reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function fieldValue(id) { return document.getElementById(id).value.trim(); }
+
+    challengeText.addEventListener('input', () => {
+      document.getElementById('challenge-count').textContent = `${challengeText.value.length.toLocaleString()} / 1,000,000`;
+    });
+    document.getElementById('challenge-file').addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      if (file.size > 1024 * 1024) { alert('题目文件不能超过 1 MiB。'); event.target.value = ''; return; }
+      try {
+        challengeText.value = await file.text();
+        challengeText.dispatchEvent(new Event('input'));
+        challengeText.focus();
+      } catch { alert('无法读取所选题目文件。'); }
+    });
+
+    async function makePayload() {
+      if (selected('workflow_mode') === 'smart') {
+        const text = challengeText.value;
+        if (!text.trim()) throw new Error('请先粘贴 RSA 题目文本或选择题目文件。');
+        if (text.length > 1000000) throw new Error('题目文本不能超过 1,000,000 个字符。');
+        return {challenge_text: text, timeout: fieldValue('smart-timeout')};
+      }
+      const payload = {
+        mode: selected('mode'),
+        attack_mode: attackMode.value,
+        timeout: fieldValue('timeout'),
+        show_private: selected('mode') === 'recover' || document.getElementById('show-private').checked,
+        ciphertext: document.getElementById('ciphertext').value,
+        parallel_workers: fieldValue('parallel-workers'),
+        fr_a: fieldValue('fr-a'), fr_b: fieldValue('fr-b'),
+        p_high: fieldValue('p-high'), p_unknown_bits: fieldValue('p-unknown-bits'),
+        dp: fieldValue('dp'), dq: fieldValue('dq'),
+        sm_prefix: fieldValue('sm-prefix'), sm_suffix: fieldValue('sm-suffix'), sm_len: fieldValue('sm-len')
+      };
+      if (selected('key_mode') === 'file') {
+        const file = document.getElementById('key-file').files[0];
+        if (!file) throw new Error('请先选择 RSA 公钥文件。');
+        if (file.size > 1024 * 1024) throw new Error('公钥文件不能超过 1 MiB。');
+        payload.key_file = {name: file.name, data: await readFileAsBase64(file)};
+      } else {
+        payload.n = fieldValue('n');
+        payload.e = fieldValue('e');
+      }
+      if (payload.attack_mode === 'custom') {
+        payload.attacks = Array.from(attacksSelect.selectedOptions, (option) => option.value);
+      }
+      return payload;
+    }
+
+    function showJob(job) {
+      latestJob = job;
+      setVisible(document.getElementById('empty-state'), false);
+      setVisible(document.getElementById('result'), true);
+      output.textContent = job.output || '';
+      const running = job.status === 'running';
+      const dot = document.getElementById('status-dot');
+      dot.className = 'dot ' + (running ? 'running' : job.status === 'error' ? 'error' : job.status === 'finished' ? 'finished' : '');
+      document.getElementById('status-text').textContent = running ? (job.cancel_requested ? '正在停止…' : '正在运行') : job.status === 'cancelled' ? '已停止' : job.status === 'error' ? '启动失败' : '任务已结束';
+      setVisible(stopButton, running);
+      stopButton.disabled = Boolean(job.cancel_requested);
+      stopButton.textContent = job.cancel_requested ? '正在停止…' : '停止攻击';
+      document.getElementById('exit-label').textContent = job.exit_code === null ? '' : `退出码 ${job.exit_code}`;
+      setVisible(document.getElementById('truncate-note'), job.truncated);
+      output.scrollTop = output.scrollHeight;
+    }
+
+    async function pollJob(jobId) {
+      while (true) {
+        await new Promise((resolve) => setTimeout(resolve, 700));
+        const response = await fetch(`/api/jobs/${jobId}`, {cache: 'no-store'});
+        const job = await response.json();
+        if (!response.ok) throw new Error(job.error || '无法读取任务状态。');
+        showJob(job);
+        if (job.status !== 'running') break;
+      }
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      runButton.disabled = true;
+      runButton.textContent = '正在提交…';
+      try {
+        const response = await fetch('/api/run', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(await makePayload())
+        });
+        const job = await response.json();
+        if (!response.ok) throw new Error(job.error || '任务提交失败。');
+        showJob(job);
+        await pollJob(job.id);
+      } catch (error) {
+        if (latestJob && latestJob.status === 'running') {
+          latestJob = {...latestJob, status: 'error', output: `${latestJob.output}\n${error.message}`};
+          showJob(latestJob);
+        } else {
+          alert(error.message);
+        }
+      } finally {
+        runButton.disabled = false;
+        refreshForm();
+      }
+    });
+
+    stopButton.addEventListener('click', async () => {
+      if (!latestJob || latestJob.status !== 'running') return;
+      stopButton.disabled = true;
+      stopButton.textContent = '正在停止…';
+      try {
+        const response = await fetch(`/api/jobs/${latestJob.id}/cancel`, {method: 'POST'});
+        const job = await response.json();
+        if (!response.ok) throw new Error(job.error || '停止任务失败。');
+        showJob(job);
+      } catch (error) {
+        stopButton.disabled = false;
+        stopButton.textContent = '停止攻击';
+        alert(error.message);
+      }
+    });
+
+    document.getElementById('copy-button').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(output.textContent); }
+      catch { alert('复制失败，请手动选择日志文本。'); }
+    });
+    document.getElementById('save-button').addEventListener('click', () => {
+      const blob = new Blob([output.textContent], {type: 'text/plain;charset=utf-8'});
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob); link.download = 'rsactftool-output.txt'; link.click();
+      URL.revokeObjectURL(link.href);
+    });
+    refreshForm();
+  </script>
+</body>
+</html>

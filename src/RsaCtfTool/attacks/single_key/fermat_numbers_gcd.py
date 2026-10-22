@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+from tqdm import tqdm
+from RsaCtfTool.attacks.abstract_attack import AbstractAttack
+from RsaCtfTool.lib.number_theory import gcd, powmod
+
+
+class Attack(AbstractAttack):
+    def __init__(self, timeout=60):
+        super().__init__(timeout)
+        self.speed = AbstractAttack.speed_enum["medium"]
+
+    def attack(self, publickey, cipher=[], progress=True):
+        """Run tests against fermat composites"""
+        limit = 30
+        p = q = None
+        for x in tqdm(range(2, limit), disable=(not progress)):
+            # gcd(F_x, n) == gcd(F_x mod n, n), and 2^(2^x) mod n costs
+            # only x modular squarings - building the full Fermat number
+            # instead (2^(2^29)+1 is a 670-million-bit integer) made the
+            # last iterations of this loop dominate the whole attack.
+            r = powmod(2, 1 << x, publickey.n)
+            g = gcd(r + 1, publickey.n)
+            if 1 < g < publickey.n:
+                p = publickey.n // g
+                q = g
+                break
+        return self.create_private_key_from_pqe(p, q, publickey.e, publickey.n)
+
+    def test(self):
+        from RsaCtfTool.lib.keys_wrapper import PublicKey
+
+        key_data = """-----BEGIN PUBLIC KEY-----
+MF4wDQYJKoZIhvcNAQEBBQADTQAwSgJDTuJNJVnOa1qp8n91iIWs30F6xA+I/nkf
+MV7Ad/0M5seWOKImUngYig60DRfrXwXa7GWh8qmK0V5sR+ib27+bbZfwAQIDAQAB
+-----END PUBLIC KEY-----"""
+        result = self.attack(PublicKey(key_data), progress=False)
+        return result != (None, None)

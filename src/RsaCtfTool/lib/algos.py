@@ -1,0 +1,1513 @@
+#!/usr/bin/env python3
+
+import logging
+import math
+import sys
+import time
+from array import array
+from itertools import permutations
+from random import randint
+
+from tqdm import tqdm
+
+from RsaCtfTool.lib.coppersmith import (
+    CoppersmithError,
+    CoppersmithParameters,
+    coppersmith_univariate,
+)
+from RsaCtfTool.lib.exceptions import FactorizationError
+from RsaCtfTool.lib.number_theory import (
+    convergents_from_contfrac,
+    cuberoot,
+    fdivmod,
+    fib,
+    gcd,
+    gmpy_version,
+    ilog2,
+    ilog10,
+    ilogb,
+    introot,
+    inv_mod_pow_of_2,
+    invmod,
+    iroot,
+    is_congruent,
+    is_prime,
+    is_square,
+    isqrt,
+    isqrt_rem,
+    legendre,
+    log,
+    mlucas,
+    mod,
+    mulmod,
+    next_prime,
+    powmod,
+    primes,
+    rational_to_contfrac,
+    tonelli,
+    trivial_factorization_with_n_phi,
+)
+from RsaCtfTool.lib.polynomial import Polynomial, PolynomialDivisionError
+
+sys.setrecursionlimit(100000)
+
+
+def brent(N):
+    """Pollard rho with brent optimizations taken from: https://gist.github.com/ssanin82/18582bf4a1849dfb8afd"""
+    if N < 2:
+        return None
+    if N & 1 == 0:
+        return 2
+    if is_prime(N):
+        return N
+    while True:
+        y = randint(1, N - 1)
+        c = randint(1, N - 1)
+        m = randint(1, N - 1)
+
+        g = 1
+        r = 1
+        q = 1
+        ys = y
+
+        while g == 1:
+            x = y
+            for _ in range(r):
+                y = (powmod(y, 2, N) + c) % N
+            k = 0
+
+            while k < r and g == 1:
+                ys = y
+                q = 1
+
+                for _ in range(min(m, r - k)):
+                    y = (powmod(y, 2, N) + c) % N
+                    q = q * abs(x - y) % N
+
+                g = gcd(q, N)
+                k += m
+            r <<= 1
+
+        if g == N:
+            g = 1
+
+            while g == 1:
+                ys = (powmod(ys, 2, N) + c) % N
+                g = gcd(abs(x - ys), N)
+
+            if g == N:
+                continue
+        return g
+
+
+def strong_pseudoprime(N):
+    """Find a factor of N using the strong pseudoprime (Miller-Rabin) test.
+    Iterates prime bases a, climbs the ladder a^f, a^{2f}, a^{4f}, ..., a^{N-1},
+    and returns a factor when a nontrivial square root of 1 is found.
+    Ref: Wagstaff, "The Joy of Factoring", §3.7 (strong pseudoprime test),
+    and §10.4 (factoring Carmichael numbers).
+    """
+    f = N1 = N - 1
+    e = 0
+    while f & 1 == 0:
+        f >>= 1
+        e += 1
+    a = 2
+    while a <= N1:
+        b = powmod(a, f, N)
+        if b == 1 or b == N1:
+            a = next_prime(a)
+            continue
+        for _ in range(e):
+            prev = b
+            b = powmod(b,2,N)
+            if b == 1:
+                p = gcd(prev - 1, N)
+                q = gcd(prev + 1, N)
+                # prev^2 == 1 (mod N) splits every prime power of N between
+                # prev-1 and prev+1, so p*q == N whenever the root is
+                # nontrivial. Accept either orientation: requiring p < q
+                # discards half of all nontrivial roots (for 561 every root
+                # from the first 14 prime bases came out as p > q).
+                if p * q == N and 1 < p and 1 < q:
+                    return min(p, q), max(p, q)
+                break
+        a = next_prime(a)
+    return None
+
+
+def close_factor(n, b, progress=True):
+    """
+    source: https://web.archive.org/web/20201031000312/https://grocid.net/2017/09/16/finding-close-prime-factorizations/
+    """
+    # approximate phi
+    phi_approx = n - 2 * isqrt(n) + 1
+    # Create a look-up table
+    # If phi_approx is odd we are going to search for odd i values in the lookup table,
+    # else we are going to search for even i values in the lookup table.
+    look_up = {}
+    z = 1
+    parity = phi_approx & 1
+    for i in tqdm(range(b + 1), disable=(not progress)):
+        if i & 1 == parity:
+            look_up[z] = i
+        z <<= 1
+        z -= (z >= n) * n
+
+    # check the table
+    mu = invmod(powmod(2, phi_approx, n), n)
+    fac = powmod(2, b, n)
+
+    # Baby-step/giant-step: candidate corrections are e = j - i*b with
+    # j in [0, b] (the table) and i in [0, b], together covering
+    # e in [-b^2, b].  Scanning i past b cannot match any new table
+    # entry, so the old b*b iteration bound was unreachable dead range.
+    for i in tqdm(range(b + 1), disable=(not progress)):
+        if mu in look_up:
+            phi = phi_approx + look_up[mu] - (i * b)
+            r = trivial_factorization_with_n_phi(n, phi)
+            if r is not None:
+                return r
+        mu = mulmod(mu, fac, n)
+
+
+def prime_base_collision(n):
+    """Prime-base square-collision factoring.
+    Iterates i from ⌊√n⌋ upward computing i² mod n.  When i² ≡ p² (mod n)
+    for the current prime p, returns gcd(i−p, n).  Falls back to the next
+    prime if no collision is found in the full range.
+    Note: this is NOT Dixon's smooth-number factorisation.
+    """
+    start, basej2N, base = isqrt(n), [4 % n], [2]
+    while True:
+        lp = base[-1]
+        for i in range(start, n):
+            i2N = powmod(i, 2, n)
+            if i2N == basej2N[-1]:
+                p = gcd(i - lp, n)
+                if 1 < p < n:
+                    return p, n // p
+        base.append(next_prime(lp))
+        basej2N.append(powmod(base[-1], 2, n))
+
+
+def _collect_dixon_relations(n, base, t, n_needed, progress):
+    """Collect B-smooth relations a² ≡ ∏ pⱼ^{eⱼ} (mod n).
+
+    Returns (relations, split) where *split* is (p, q) if an immediate
+    factor was found (a² ≡ 0 or a² ≡ 1 with a ≢ ±1), else (list, None).
+    """
+    relations = []
+    with tqdm(total=n_needed, disable=not progress, desc="Dixon relations") as pbar:
+        while len(relations) < n_needed:
+            a = randint(2, n - 1)
+            a2 = powmod(a, 2, n)
+
+            if a2 == 0:
+                g = gcd(a, n)
+                if 1 < g < n:
+                    return relations, (g, n // g)
+
+            if a2 == 1 and a != 1 and a != n - 1:
+                g = gcd(a - 1, n)
+                if 1 < g < n:
+                    return relations, (g, n // g)
+
+            temp = a2
+            full_exp = [0] * t
+            for idx, p in enumerate(base):
+                while temp % p == 0:
+                    temp //= p
+                    full_exp[idx] += 1
+            if temp == 1:
+                parity = 0
+                for idx in range(t):
+                    if full_exp[idx] & 1:
+                        parity |= 1 << idx
+                relations.append((a, parity, full_exp))
+                pbar.update(1)
+    return relations, None
+
+
+def _gaussian_elimination_gf2(rows, t):
+    """Gaussian elimination over GF(2) with pivot tracking.
+
+    Each element of *rows* is (bitmask, relation_mask).  Returns the
+    transformed list in reduced row-echelon form.
+    """
+    m = len(rows)
+    pivot_row = 0
+    for col in range(t):
+        found = -1
+        for i in range(pivot_row, m):
+            if (rows[i][0] >> col) & 1:
+                found = i
+                break
+        if found == -1:
+            continue
+        rows[pivot_row], rows[found] = rows[found], rows[pivot_row]
+        for i in range(m):
+            if i != pivot_row and (rows[i][0] >> col) & 1:
+                rows[i] = (
+                    rows[i][0] ^ rows[pivot_row][0],
+                    rows[i][1] ^ rows[pivot_row][1],
+                )
+        pivot_row += 1
+    return rows
+
+
+def _try_smooth_dependency(rows, relations, base, t, n):
+    """Try each null-space vector for a nontrivial split x² ≡ y² (mod n).
+
+    Returns (p, q) on success, None if every dependency gives x ≡ ±y.
+    """
+    m = len(relations)
+    for bits, rel_mask in rows:
+        # rel_mask may be a single relation: one row already in null space
+        # means that relation is itself a square (x² ≡ y² with one term),
+        # which is a perfectly valid dependency - e.g. 9² ≡ 2² (mod 77).
+        if bits == 0 and rel_mask != 0:
+            x = 1
+            total_exp = [0] * t
+            for i in range(m):
+                if (rel_mask >> i) & 1:
+                    x = (x * relations[i][0]) % n
+                    for j in range(t):
+                        total_exp[j] += relations[i][2][j]
+            y = 1
+            for j, p in enumerate(base):
+                if total_exp[j]:
+                    y = (y * powmod(p, total_exp[j] // 2, n)) % n
+            if x != y and x != n - y:
+                g = gcd(x - y, n)
+                if 1 < g < n:
+                    return g, n // g
+    return None
+
+
+def dixon(n, B=None, progress=True, n_extra=40, max_retries=3):
+    """Dixon's smooth-number factorisation (Dixon, Math. Comp. 36, 1981).
+    Collects relations a_i² ≡ ∏ pⱼ^{e_{ij}} (mod n) that are B-smooth,
+    solves a linear dependency over GF(2) to obtain x² ≡ y² (mod n),
+    and returns gcd(x−y, n).
+
+    Heuristic complexity: L[1/2, √2] = exp(√(2 log n log log n)).
+    In practice superseded by QS/NFS, but included for pedagogical completeness.
+    """
+    if n & 1 == 0:
+        return 2, n // 2
+
+    if B is None:
+        ln = log(n)
+        B = max(10, int(math.exp((ln * math.log(ln) / 2) ** 0.5)) + 1)
+
+    base = primes(B)
+    t = len(base)
+    n_needed = t + n_extra
+
+    for _attempt in range(max_retries):
+        relations, split = _collect_dixon_relations(n, base, t, n_needed, progress)
+        if split is not None:
+            return split
+        if len(relations) < t + 5:
+            continue
+
+        rows = [(relations[i][1], 1 << i) for i in range(len(relations))]
+        rows = _gaussian_elimination_gf2(rows, t)
+        split = _try_smooth_dependency(rows, relations, base, t, n)
+        if split is not None:
+            return split
+
+    return None
+
+
+def _build_qs_factor_base(n, B):
+    """Build QS factor base: -1 + primes (from first B primes).
+
+    Every prime p <= the B-th prime is included. Sieving roots:
+      - p = 2              → root x ≡ n mod 2 (odd n → every other x)
+      - (n|p) = 1          → Tonelli-Shanks gives two roots
+      - (n|p) = 0          → p divides n, root 0 (x ≡ 0 mod p ⇒ p|Q(x))
+      - otherwise (QNR)    → Q(x) mod p is never 0 for any x (skip)
+
+    Returns (base, sqrt_map) where base has -1 at index 0.
+    """
+    base = [-1]
+    sqrt_map = {}
+    for p in primes(B):
+        if p == 2:
+            sqrt_map[2] = (n & 1,)  # odd n → Q(x) even when x odd
+            base.append(2)
+            continue
+        ls = legendre(n % p, p)
+        if ls == 1:
+            r = tonelli(n % p, p)
+            sqrt_map[p] = (r, p - r)
+            base.append(p)
+        elif ls == 0:
+            sqrt_map[p] = (0,)
+            base.append(p)
+    return base, sqrt_map
+
+
+def _qs_sieve_interval(n, base, sqrt_map, M, progress=True, exclude_halfwidth=0):
+    """Sieve Q(x) = x^2 - n over x in [sqrt(n)-M, sqrt(n)+M].
+
+    Real logarithmic sieving: for every factor-base prime the stored
+    modular roots mark exactly the positions where p divides Q(x), so
+    accumulating log2(p) over those positions approximates log2 of the
+    smooth part of |Q(x)|. Only positions whose accumulated value comes
+    within a small margin of log2|Q(x)| undergo exact trial division,
+    which remains the final arbiter of smoothness.
+
+    exclude_halfwidth > 0 skips the inner [sqrt(n)-h, sqrt(n)+h] shell,
+    letting retries widen M without re-scanning the previous interval.
+
+    Returns list of (x, parity_mask, full_exp) relations compatible
+    with _try_smooth_dependency / _gaussian_elimination_gf2.
+    """
+    t = len(base)
+    X = isqrt(n)
+    size = 2 * M + 1
+
+    # log2|Q(X+off)| = log2|off| + log2(X+off+X). The second term varies by
+    # less than 0.001 bits over the whole interval, so a constant plus a
+    # per-|off| log term approximates it without any per-position
+    # big-integer arithmetic (error <= 1 bit, absorbed by the margin).
+    # off == 0 with X*X == n would make Q vanish; its target goes to -inf.
+    two_x_bits = float((2 * X).bit_length())
+    # Symmetry |off| on both interval halves lets one half table serve the
+    # whole range; array('d') keeps it as packed C doubles.
+    half = array("d", (math.log2(v) + two_x_bits for v in range(1, M + 1)))
+    log_q = array("d")
+    log_q.extend(reversed(half))          # off = -M .. -1
+    log_q.append(float("-inf"))           # off == 0: Q vanishes when X*X == n
+    log_q.extend(half)                    # off = 1 .. M
+    del half
+    logs = array("d", [0.0]) * size
+
+    # Accumulate log2(p) at every position where p divides Q(X+off).
+    # Roots were precomputed by _build_qs_factor_base: x ≡ ±r mod p for
+    # (n|p)=1, x ≡ 0 for p | n, and x odd for p = 2 with odd n.
+    # One sieving line per prime-power level: level k marks the positions
+    # where p^k divides Q(x) and contributes the k-th copy of log2(p).
+    # Roots are lifted level by level (Hensel). Without the higher levels,
+    # high powers of small primes - very common among smooth values - would
+    # go uncounted and the margin test would discard genuine smooths.
+    q_max_mod = 1 << (n.bit_length() + 1)
+    for p_idx in range(1, t):
+        p = int(base[p_idx])
+        lp = math.log2(p)
+        rs = sorted({int(r) % p for r in sqrt_map[base[p_idx]]})
+        mod = p
+        while rs and mod <= q_max_mod:
+            for r in rs:
+                # index i corresponds to off = i - M and x = X + off, so
+                # x ≡ r (mod p^k)  ⇔  i ≡ r - X + M (mod p^k).
+                start = (r - X + M) % mod
+                seg = logs[start::mod]
+                logs[start::mod] = array("d", [v + lp for v in seg])
+            nxt = []
+            for r in rs:
+                for t_lift in range(p):
+                    cand = r + t_lift * mod
+                    if (cand * cand - n) % (mod * p) == 0 and cand not in nxt:
+                        nxt.append(cand)
+            rs = nxt
+            mod *= p
+
+    # A B-smooth |Q| reaches log_q exactly (every prime factor lies in the
+    # base), so the only gap between logs and log_q is float rounding -
+    # under 1e-12 bits even for large bases. A 2-bit margin therefore keeps
+    # every smooth position while discarding almost all non-smooth ones.
+    margin = 2.0
+
+    relations = []
+    with tqdm(total=size, disable=not progress, desc="QS trial") as pbar:
+        for i in range(size):
+            pbar.update(1)
+            off = i - M
+            if exclude_halfwidth and -exclude_halfwidth <= off <= exclude_halfwidth:
+                continue
+            if logs[i] < log_q[i] - margin:
+                continue
+            x = X + off
+            q_val = x * x - n
+            if q_val == 0:
+                continue
+
+            temp = -q_val if q_val < 0 else q_val
+            full_exp = [1, 0] + [0] * (t - 2) if q_val < 0 else [0] * t
+            for p_idx in range(1, t):
+                p = base[p_idx]
+                while temp % p == 0:
+                    temp //= p
+                    full_exp[p_idx] += 1
+
+            if temp == 1:
+                parity = 0
+                for idx in range(t):
+                    if full_exp[idx] & 1:
+                        parity |= 1 << idx
+                relations.append((x, parity, full_exp))
+
+    return relations
+
+
+def quadratic_sieve(n, B=None, M=None, progress=True, n_extra=10, max_retries=6):
+    """Quadratic Sieve factorisation.
+
+    Complexity: L[1/2, 1] = exp(sqrt(log n log log n)).
+
+    Sieves Q(x) = x^2 - n for B-smooth values, then reuses the same
+    GF(2) linear algebra and dependency-checking as Dixon.
+    """
+    if n < 2:
+        return None
+
+    if n & 1 == 0:
+        return 2, n // 2
+    if is_prime(n):
+        return None
+    if is_square(n):
+        r = isqrt(n)
+        return r, r
+
+    if gmpy_version > 0 and is_prime(n):
+        return None
+
+    if B is None:
+        ln_n = log(n)
+        ln_ln_n = math.log(ln_n)
+        B_opt = int(math.exp(0.5 * (ln_n * ln_ln_n) ** 0.5))
+        if B_opt > 10:
+            B = max(10, int(B_opt / math.log(B_opt)))
+        else:
+            B = max(10, B_opt)
+
+    if M is None:
+        M = max(B * 300, 200000)
+
+    base, sqrt_map = _build_qs_factor_base(n, B)
+    t = len(base)
+    if t < 2:
+        return None
+
+    n_needed = t + n_extra
+    relations = []
+    sieved_halfwidth = 0
+    for _attempt in range(max_retries):
+        # Only sieve the newly exposed outer shell; the inner interval was
+        # already scanned with the same deterministic parameters.
+        relations.extend(
+            _qs_sieve_interval(n, base, sqrt_map, M, progress, sieved_halfwidth)
+        )
+        sieved_halfwidth = M
+
+        if len(relations) < n_needed:
+            M = min(M * 2, 5000000)
+            continue
+
+        rows = [(relations[i][1], 1 << i) for i in range(len(relations))]
+        rows = _gaussian_elimination_gf2(rows, t)
+        split = _try_smooth_dependency(rows, relations, base, t, n)
+        if split is not None:
+            return split
+        M = min(M * 2, 5000000)
+
+    return None
+
+
+def euler(n):
+    """Euler's factorisation method.
+    Finds two distinct representations of n as a sum of two squares,
+    then recovers factors via GCD of the mixed sums/differences.
+    Returns None if fewer than two representations are found.
+    """
+    end, a, b, solutionsFound, firstb, lf = isqrt(n), 0, 0, [], -1, 0
+
+    while a < end:
+        b, f = isqrt_rem(n - a**2)
+        if f == 0 and (a != firstb) and (b != firstb):
+            solutionsFound.append([b, a])
+            firstb = b
+            lf = len(solutionsFound)
+            if lf == 2:
+                break
+        a += 1
+
+    if lf < 2:
+        return None
+
+    a = solutionsFound[0][0]
+    b = solutionsFound[0][1]
+    c = solutionsFound[1][0]
+    d = solutionsFound[1][1]
+
+    k = gcd(a - c, d - b) ** 2
+    h = gcd(a + c, d + b) ** 2
+    m_val = gcd(a + c, d - b) ** 2
+    lev = gcd(a - c, d + b) ** 2
+
+    return gcd(k + h, n), gcd(lev + m_val, n)
+
+
+def factor_2PN(N, P=3):
+    """
+    based on: https://github.com/hirogwa/crypto-playground/blob/master/break_rsa.py
+    premise: P is prime > 2 and sqrt(2PN) is close to (Pp + 2q)/2
+    M = (Pp + 2q)/2 is a midpoint of (Pp, 2q).
+    Note that since both p and q are odd, A = M + 0.5 is an integer.
+    There exits an integer x such that
+    min(Pp, 2q) = A - x - 1
+    max(Pp, 2q) = A + x
+    It follows;
+    N = pq = (A-x-1)(A+x)/2P = (A^2 - x^2 - A - x)/2P
+    => 2PN = A^2 - x^2 - A - x
+    => x^2 + x + (-A^2 + A + 2PN) = 0
+    We can obtain p,q from A and N via quadratic formula.
+    """
+
+    P2N = (P * N) << 1
+    A, remainder = isqrt_rem(P2N)
+    A += int(remainder != 0)
+
+    c = -(A * A) + A + P2N
+    disc = 1 - (c << 2)
+
+    if disc >= 0:
+        isqrtdisc = isqrt(disc)
+
+        for x in [(-1 + isqrtdisc) >> 1, (-1 - isqrtdisc) >> 1]:
+            if x < 0:
+                continue
+
+            # 2q < Pp
+            p = (A + x) // P
+            q = (A - x - 1) >> 1
+            if p * q == N:
+                return p, q
+
+            # Pp < 2q
+            p = (A - x - 1) // P
+            q = (A + x) >> 1
+            if p * q == N:
+                return p, q
+
+    return None
+
+
+def factor_XYXZ(n, base=3):
+    """Factor n of the form x^y · x^z = x^{y+z} where x is prime.
+    Uses integer root extraction: for each exponent k ≥ 2, compute
+    the k-th root r = floor(n^{1/k}); if r^k = n and r is prime, return (r, r^{k-1}).
+    """
+    max_power = int(log(n) / log(base))
+    for k in range(2, max_power + 1):
+        r, exact = iroot(n, k)
+        if exact and is_prime(r):
+            return r, n // r
+
+
+def fermat(n):
+    if (n - 2) & 3 == 0:  # Congruence n = 2 (mod 4).
+        raise FactorizationError
+    a, rem = isqrt_rem(n)
+    b2 = -rem
+    c0 = (a << 1) + 1
+    c = c0
+    while not is_square(b2):
+        b2 += c
+        c += 2
+    a = (c - 1) >> 1
+    b = isqrt(b2)
+    p, q = a - b, a + b
+    if p == 1:
+        # Only the trivial representation (1, n) exists: n is prime.
+        return None
+    return p, q
+
+
+def InverseInverseSqrt2exp(n, k):
+    """
+    Computes an approximation to the modular inverse square root of `n` with `k` bits.
+    """
+    a = 1
+    t = 3
+    while t < k:
+        t = min(k, (t << 1) - 2)
+        # Update `a` using a Newton-Raphson-like iteration for inverse square roots.
+        a = (a * (3 - (a * a) * n) >> 1) & ((1 << t) - 1)
+    return inv_mod_pow_of_2(a, k)
+
+
+def FactorHighAndLowBitsEqual(n, max_middle_bits=24):
+    """
+    Code taken and heavy modified from https://github.com/google/paranoid_crypto/blob/main/paranoid_crypto/lib/rsa_util.py
+    Licensed under open source Apache License Version 2.0, January 2004.
+    """
+    if ((n_size := n.bit_length()) < 6) or (n & 7 != 1):
+        return None
+    k = (n_size + 1) >> 1
+    r0 = InverseInverseSqrt2exp(n, k + 1)
+    if r0 is None:
+        raise ArithmeticError("expecting that square root exists")
+    a = isqrt(n - 1) + 1
+    k_shift = 1 << k
+
+    logger = logging.getLogger("global_logger")
+    for middle_bits in range(1, max_middle_bits + 1):
+        logger.debug(f"FactorHighAndLowBitsEqual: middle bits: "
+                     f"{middle_bits} of {n_size}/2")
+        for r in [r0, k_shift - r0]:
+            s = a
+            for i in range(k):
+                if ((s ^ r) >> i) & 1:
+                    m = min(middle_bits, i)
+                    shift_val = 1 << (i - m)  # Pre-compute shift value
+                    for _ in range(1 << m):
+                        s += shift_val
+                        d = (s * s) - n
+                        if is_square(d):
+                            d_sqrt = isqrt(d)
+                            return (s - d_sqrt, s + d_sqrt)
+
+
+class Fibonacci:
+    def __init__(self, progress=False, verbose=False):
+        self.progress = progress
+        self.verbose = verbose
+
+    def _fib_res(self, n, p):
+        """fibonacci sequence nth item modulo p"""
+        if n == 0:
+            return (0, 1)
+        a, b = self._fib_res(n >> 1, p)
+        c = mod((mod(a, p) * mod(((b << 1) - a), p)), p)
+        d = mod((powmod(a, 2, p) + powmod(b, 2, p)), p)
+        return (c, d) if n & 1 == 0 else (d, mod((c + d), p))
+
+    def get_n_mod_d(self, n, d, use="mersenne"):
+        if n < 0:
+            raise ValueError("Negative arguments not implemented")
+        if use == "gmpy":
+            return mod(fib(n), d)
+        elif use == "mersenne":
+            return powmod(2, n, d) - 1
+        else:
+            return self._fib_res(n, d)[0]
+
+    def get_period_bigint(self, N, min_accept, xdiff):
+        logger = logging.getLogger("global_logger")
+        search_len = int(pow(N, (1.0 / 6) / 100))
+
+        search_len = max(search_len, min_accept)
+        if self.verbose:
+            logger.debug("Search_len: %d, log2(N): %d" % (search_len, ilog2(N)))
+
+        starttime = time.time()
+        p_len = 10 ** (((ilog10(N) + xdiff) >> 1) + 1)
+        begin, end = N - p_len, N + p_len
+        begin = max(begin, 1)
+        if self.verbose:
+            logger.debug("Search begin: %d, end: %d" % (begin, end))
+
+        look_up = {
+            self.get_n_mod_d(x, N): x
+            for x in tqdm(range(search_len), disable=(not self.progress))
+        }
+
+        if self.verbose:
+            logger.debug("Searching...")
+
+        while True:
+            randi = randint(begin, end)
+            if (res := self.get_n_mod_d(randi, N)) > 0 and res in look_up:
+                if randi > (res_n := look_up[res]):
+                    if (phi_guess := randi - res_n) & 1 == 0 and self.get_n_mod_d(
+                        phi_guess, N
+                    ) == 0:
+                        td = int(time.time() - starttime)
+                        if self.verbose:
+                            logger.debug(
+                                "For N = %d Found randi: %d, time used %f secs."
+                                % (N, randi, td)
+                            )
+                        return phi_guess
+                    else:
+                        if self.verbose:
+                            logger.debug(
+                                "For N = %d\n Found res: %d, res_n: %d but failed!"
+                                % (
+                                    N,
+                                    res,
+                                    res_n,
+                                )
+                            )
+
+    def factorization(self, N, min_accept, xdiff):
+        phi_guess = self.get_period_bigint(N, min_accept, xdiff)
+        if phi_guess is not None:
+            return trivial_factorization_with_n_phi(N, phi_guess)
+
+
+def hart(N):
+    """
+    Hart's one line attack
+    taken from wagstaff the joy of factoring
+
+    N must be an odd composite; for prime N no nontrivial split exists and
+    the scan below would run until the caller's timeout.  The first square
+    hit normally yields a nontrivial factor; if it does not (defensive),
+    keep scanning instead of returning a trivial pair.
+    """
+    i = 1
+    while True:
+        s = isqrt(N * i) + 1
+        m = powmod(s, 2, N)
+        if is_square(m):
+            t = isqrt(m)
+            g = gcd(s - t, N)
+            if 1 < g < N:
+                return g, N // g
+        i += 1
+
+
+def kraitchik(n):
+    x = isqrt(n)
+    while True:
+        x2 = x * x
+        y2 = x2 - n
+        while y2 >= 0:
+            if is_square(y2):
+                y = isqrt(y2)
+                z, w = x + y, x - y
+                if z % n != 0 and w % n != 0:
+                    return gcd(z, n), gcd(w, n)
+                # Only the trivial representation exists: n is prime.
+                # Continuing would scan x forever without another square.
+                return None
+            y2 -= n
+        x += 1
+
+
+def lehman(n):
+    """
+    based on: https://programmingpraxis.com/2017/08/22/lehmans-factoring-algorithm/
+    """
+    if is_congruent(n, 2, 4):
+        raise FactorizationError
+
+    for k in range(1, cuberoot(n) + 1):
+        nk4 = n * k << 2
+        ki4 = isqrt(k) << 2
+        ink4 = isqrt(nk4) + 1
+        i6 = introot(n, 6)
+        ink4i6ki4 = ink4 + (i6 // (ki4)) + 1
+        for a in range(ink4, ink4i6ki4):
+            b2 = (a * a) - nk4
+            if is_square(b2):
+                b = isqrt(b2)
+                p = gcd(a + b, n)
+                q = gcd(a - b, n)
+                if 1 < p < n and p * q == n:
+                    return p, q
+    return None
+
+
+def lehmer_machine(n):
+    """
+    fermat based integer factorization
+    """
+    if (n - 2) & 3 == 0:  # Congruence n = 2 (mod 4).
+        raise FactorizationError
+    y = 1
+    while not is_square(n + y**2):
+        y += 1
+    x = isqrt(n + y**2)
+    if x - y == 1:
+        # Only the trivial representation (1, n) exists: n is prime.
+        return None
+    return x - y, x + y
+
+
+def solve_partial_q(n, e, dp, dq, qi, part_q, progress=True, Limit=100000):
+    """Search for partial q.
+    Tunable to search longer.
+
+    Source:
+    https://0day.work/0ctf-2016-quals-writeups/
+
+    Based on:
+    RSA? Challenge in 0ctf 2016
+
+    we are given a private key masked and have the components of the
+    chinese remainder theorem and a partial "q"
+
+    The above writeup detailed a method to derive q candidates
+    given the CRT component dQ
+
+    CRT Components definition
+    dP    = e^-1 mod(p-1)
+    dQ    = e^-1 mod(q-1)
+    qInv  = q^-1 mod p
+
+    Equations from https://0day.work/0ctf-2016-quals-writeups/
+
+    dP Equalities
+    -------------
+    dP                 = d mod (p - 1)
+    dP                 = d mod (p - 1)
+    e * dP             = 1 mod (p - 1)
+    e * dP - k*(p - 1) = 1
+    e * dP             = 1 + k*(p-1)
+    e * dP -1          = k*(p-1)
+    (e * dP -1)/k      = (p-1)
+    (e * dP -1)/k +1   = p
+
+    dQ Equalities
+    -------------
+    dQ                 = d mod (q - 1)
+    dQ                 = d mod (q - 1)
+    e * dQ             = 1 mod (q - 1)
+    e * dQ - k*(p - 1) = 1
+    e * dQ             = 1 + k*(q-1)
+    e * dQ -1          = k*(q-1)
+    (e * dQ -1)/k      = (q-1)
+    (e * dQ -1)/k +1   = p
+
+    qInv Equalities
+    ---------------
+    qInv            = q^-1 mod p
+    q * qInv        = 1 (mod p)
+    q * qInv - k*p  = 1            (For some value "k")
+    q * qInv        = 1 + k*p
+    q * qInv - 1    = k*p
+    (q * qInv -1)/k = p
+
+    Additionally the following paper details an algorithm to generate
+    p and q prime candidates with just the CRT components
+
+    https://eprint.iacr.org/2004/147.pdf
+    """
+
+    edqm1 = e * dq - 1
+    edpm1 = e * dp - 1
+
+    found_q = False
+    for j in tqdm(range(Limit, 1, -1), disable=(not progress)):
+        q = edqm1 // j + 1
+        if q & part_q == part_q:
+            found_q = True
+            break
+
+    if not found_q:
+        raise FactorizationError("partial q not found")
+
+    if n > q and n % q == 0:
+        return q, n // q
+
+    found_p = False
+    for k in tqdm(range(1, Limit, 1), disable=(not progress)):
+        p = edpm1 // k + 1
+        if gcd(p, q) == 1 and invmod(q, p) == qi:
+            found_p = True
+            break
+
+    if not found_p or p * q != n:
+        raise FactorizationError("partial p not found")
+
+    return p, q
+
+
+def pollard_P_1(n, progress=True):
+    """Pollard's p-1 factorisation, stage 1.
+
+    Single-base accumulation a <- a^p mod n walking the prime powers one
+    at a time, with a gcd check after every single power. Checking only
+    at prime boundaries collides into gcd == n whenever both factors are
+    smooth against the same bound (their orders start dividing the
+    accumulated exponent at the same checkpoint); per-power checks split
+    them at different steps. The old form restarted a fresh full-length
+    exponentiation chain per prime, an O(#primes * |z|) blowup in powmods.
+    """
+    logn = log(isqrt(n))
+    prime = list(primes(997))
+    for start in (2, 3, 5, 7):
+        a = start
+        overshot = False
+        for pp in tqdm(prime, disable=(not progress)):
+            e = int(logn / log(pp)) + 1
+            for _ in range(e):
+                a = powmod(a, pp, n)
+                p = gcd(n, a - 1)
+                if p == n:
+                    # The base's order divides both p-1 and q-1; another
+                    # base usually splits them apart.
+                    overshot = True
+                    break
+                if p > 1:
+                    return int(p), int(n // p)
+            if overshot:
+                break
+    return None
+
+
+def pollard_rho(n, max_retries=8):
+    """Floyd-cycle Pollard rho with randomised polynomials.
+
+    A degenerate run (cycle collapsed onto gcd(x-y, n) == n) restarts with
+    a fresh polynomial instead of returning the trivial factor.
+    """
+    for _ in range(max_retries):
+        c = randint(1, n - 3)
+        x = y = randint(2, n - 2)
+        d = 1
+        while d == 1:
+            x = (powmod(x, 2, n) + c) % n
+            y = (powmod(y, 2, n) + c) % n
+            y = (powmod(y, 2, n) + c) % n
+            d = gcd(abs(y - x), n)
+        if 1 < d < n:
+            return d
+    return None
+
+
+def shor(n):
+    """
+    Shor's algorithm: only the classical part of it, implemented in a very naive and linear way.
+    Use the quantum period finding function: f(x) = a^x % N to find r, then a^r == 1 (mod N) and that is what the quantum computer
+    gives advantage over classical algorithms.
+    Here in this code we use a linear search of r of even numbers.
+    Equivalent to solving DLP with bruteforce.
+    https://en.wikipedia.org/wiki/Shor%27s_algorithm
+    """
+    for a in range(2, n):
+        # a should be coprime of n otherwise it is a trivial factor of n.
+        if (g := gcd(n, a)) != 1:
+            return g, n // g
+        for r in range(
+            2, n, 2
+        ):  # from this step is that it shoul be run in a quantum computer, but we are doing a linear search.
+            if powmod(a, r, n) == 1:
+                if (ar2 := powmod(a, r >> 1, n)) != n - 1:
+                    g1, g2 = gcd(ar2 - 1, n), gcd(ar2 + 1, n)
+                    if (n > g1 > 1) or (n > g2 > 1):
+                        p = max(max(min(n, g1), 1), max(min(n, g2), 1))
+                        return (p, n // p)
+
+
+def SQUFOF(N):
+    """
+    Code borrowed and adapted from the wikipedia: https://en.wikipedia.org/wiki/Shanks%27s_square_forms_factorization
+    It may contain bugs
+    """
+
+    multiplier = [
+        1,
+        3,
+        5,
+        7,
+        11,
+        3 * 5,
+        3 * 7,
+        3 * 11,
+        5 * 7,
+        5 * 11,
+        7 * 11,
+        3 * 5 * 7,
+        3 * 5 * 11,
+        3 * 7 * 11,
+        5 * 7 * 11,
+        3 * 5 * 7 * 11,
+    ]
+
+    if (N - 2) & 3 == 0:  # Congruence n = 2 (mod 4).
+        raise FactorizationError
+
+    s = isqrt(N)
+    L = isqrt(s << 1) << 1
+    B = 3 * L
+
+    for k in range(len(multiplier)):
+        D = multiplier[k] * N
+        Po = Pprev = P = isqrt(D)
+        Qprev = 1
+        Q = D - (Po * Po)
+        for i in range(2, B + 1):
+            b = (Po + P) // Q
+            P = b * Q - P
+            q = Q
+            Q = Qprev + b * (Pprev - P)
+            r = isqrt(Q)
+            if not (i & 1) and (r * r) == Q:
+                break
+            Pprev, Qprev = P, q
+        b = (Po - P) // r
+        Pprev = P = b * r + P
+        Qprev = r
+        Q = (D - (Pprev * Pprev)) // Qprev
+        c1 = True
+        while c1:
+            b = (Po + P) // Q
+            Pprev = P
+            P = b * Q - P
+            q = Q
+            Q = Qprev + b * (Pprev - P)
+            Qprev = q
+            c1 = P != Pprev
+        r = gcd(N, Qprev)
+        if 1 < r < N:
+            return r, N // r
+    return None
+
+
+def pollard_strassen(n):
+    """
+    https://math.stackexchange.com/questions/185524/pollard-strassen-algorithm
+    """
+    # The scan covers j in [1, c*c] and must reach sqrt(n) to find the
+    # smallest factor of any composite, so c has to be rounded UP:
+    # floor(n**0.25)**2 < sqrt(n) misses factors (77, 15, 35 all failed).
+    r, exact = iroot(n, 4)
+    c = int(r) if exact else int(r) + 1
+    f = []
+    for i in range(c):
+        f.append(1)
+        jmin = i * c + 1
+        jmax = jmin + c - 1
+        for j in range(jmin, jmax + 1):
+            f[i] = (f[i] * j) % n
+            if (g := gcd(f[i], n)) > 1:
+                return g, n // g
+
+
+def wiener(n, e, progress=True):
+    convergents = convergents_from_contfrac(rational_to_contfrac(e, n))
+
+    for k, d in tqdm(convergents, disable=(not progress)):
+        if k != 0:
+            phi, q = fdivmod((e * d) - 1, k)
+            if (phi & 1 == 0) and (q == 0):
+                s = n - phi + 1
+                discr = (s * s) - (n << 2)  # same as  s**2 - 4*n
+                t = 0
+                if discr > 0 and is_square(discr):
+                    t = isqrt(discr)
+                if (s + t) & 1 == 0:
+                    pq = trivial_factorization_with_n_phi(n, phi)
+                    if pq is not None:
+                        return pq
+
+
+def williams_pp1(n, max_v=100, stage1_bound=100000):
+    """Williams' p+1 factorisation.
+
+    The exponent chain multiplies v by p^e for every prime p up to
+    stage1_bound (e = floor(log_p stage1_bound), i.e. the smooth part of
+    the group order p+1).  Bounding by isqrt(n) - the previous choice -
+    made the prime walk reach sqrt(n), which no real-sized key can
+    complete inside any timeout.
+    """
+    for seed in range(1, max_v + 1):
+        p = 2
+        v = seed
+        while p <= stage1_bound:
+            e = ilogb(stage1_bound, p)
+            if e == 0:
+                break
+            for _ in range(e):
+                v = mlucas(v, p, n)
+            g = gcd(v - 2, n)
+            if 1 < g < n:
+                return g, n // g
+            if g == n:
+                break
+            p = next_prime(p)
+    return None
+
+
+def difference_of_powers_factor(n):
+    """
+    Idea based on: https://github.com/trizen/perl-scripts/blob/master/Math/difference_of_powers_factorization_method.pl
+    """
+    F = set()
+    for a in range(2, isqrt(n) + 1):
+        a_k = a
+        for k in range(1, int(log(n) / log(a)) + 1):
+            if (1 << k) > n:
+                break
+            # Test a^k ± n for being a k-th power *before* raising the
+            # exponent; the old order tested a^(k+1) ± n as a k-th power.
+            for sign in [-1, 1]:
+                if (b_k := a_k + sign * n) > 0:
+                    b, e = iroot(b_k, k)
+                    if e and b > 1:
+                        if 1 < (f1 := gcd(a - b, n)) < n:
+                            F.add(f1)
+                        if 1 < (f2 := gcd(a + b, n)) < n:
+                            F.add(f2)
+            a_k *= a
+            if a_k > n:
+                break
+    return sorted(F)
+
+def franklin_reiter(n, e, c1, c2, a, b):
+    """
+    Ref: https://en.wikipedia.org/wiki/Coppersmith%27s_attack#Franklin%E2%80%93Reiter_related-message_attack
+    """
+    if n <= 1:
+        raise ValueError("modulus must be greater than 1")
+
+    if e <= 0:
+        raise ValueError("exponent must be positive")
+
+    if e < 2:
+        raise ValueError("Franklin-Reiter requires e >= 2")
+
+    x = Polynomial([0, 1], n)
+
+    f = x**e - c1
+    g = (a * x + b)**e - c2
+
+    try:
+        common = f.gcd(g)
+    except PolynomialDivisionError:
+        return None
+
+    if common.degree != 1:
+        return None
+
+    try:
+        m1 = (-common.coefficients[0]) % n
+        m2 = (a * m1 + b) % n
+    except (IndexError, TypeError):
+        return None
+
+    # Verify the recovered messages against both ciphertexts.
+    if pow(m1, e, n) != c1 % n:
+        return None
+
+    if pow(m2, e, n) != c2 % n:
+        return None
+
+    return m1, m2
+
+
+STEREOTYPED_MAX_E = 17
+SHORT_PAD_MAX_E = 5
+
+
+def _short_pad_resultant_coefficients(e, c1, c2):
+    """Return the resultant coefficients as a polynomial in y**e."""
+    matrix = [[[0] * (e + 1) for _ in range(e)] for _ in range(e)]
+
+    # In Z[y][x] / (x**e - c1), multiplication by (x + y)**e - c2
+    # has a determinant equal to the resultant.
+    for column in range(e):
+        for x_power in range(e + 1):
+            row = (column + x_power) % e
+            reduction = c1 if column + x_power >= e else 1
+            y_power = e - x_power
+            matrix[row][column][y_power] += math.comb(e, x_power) * reduction
+            if x_power == 0:
+                matrix[row][column][0] -= c2
+
+    determinant = [0]
+    for permutation in permutations(range(e)):
+        term = [1]
+        inversions = sum(
+            permutation[i] > permutation[j]
+            for i in range(e)
+            for j in range(i + 1, e)
+        )
+        for row, column in enumerate(permutation):
+            factor = matrix[row][column]
+            product = [0] * (len(term) + len(factor) - 1)
+            for left_degree, left in enumerate(term):
+                for right_degree, right in enumerate(factor):
+                    product[left_degree + right_degree] += left * right
+            term = product
+        if len(determinant) < len(term):
+            determinant.extend([0] * (len(term) - len(determinant)))
+        sign = -1 if inversions % 2 else 1
+        for degree, coefficient in enumerate(term):
+            determinant[degree] += sign * coefficient
+
+    return [determinant[degree * e] for degree in range(e + 1)]
+
+
+def stereotyped_message(n, e, c, A, B, X):
+    """
+    Recover x from c = (A * x + B)^e mod n where x < X.
+    Uses Coppersmith's univariate method. Feasible when e <= 17 and X < N^(1/e).
+    """
+    if e > STEREOTYPED_MAX_E:
+        logger = logging.getLogger("global_logger")
+        logger.warning(
+            f"[!] stereotyped_message requires e <= {STEREOTYPED_MAX_E}, got e={e}"
+        )
+        return None
+
+    if X <= 0 or pow(X, e) >= n:
+        logger = logging.getLogger("global_logger")
+        logger.warning(
+            f"[!] stereotyped_message search space X={X} violates feasibility bound X < N^(1/{e})"
+        )
+        return None
+
+    x = Polynomial([0, 1], n)
+    f = (x * A + B) ** e - c
+
+    try:
+        f = f.monic()
+    except ValueError:
+        return None
+
+    params = CoppersmithParameters(beta=1.0, X=X)
+    roots = coppersmith_univariate(f, n, params)
+
+    if roots:
+        return roots[0]
+    return None
+
+
+def short_pad(n, e, c1, c2):
+    """
+    Coppersmith Short Pad Attack.
+    Given c1 = m^e mod n and c2 = (m + delta)^e mod n, where delta is unknown but small,
+    recovers m1 and m2.
+    Theoretical bound: delta < N^(1/e^2), feasible for e <= 5.
+    Since z = delta^e < (N^(1/e^2))^e = N^(1/e), the search bound on z is X_z = N^(1/e).
+    """
+    if e > SHORT_PAD_MAX_E:
+        logger = logging.getLogger("global_logger")
+        logger.warning(
+            f"[!] short_pad attack requires e <= {SHORT_PAD_MAX_E}, got e={e}"
+        )
+        return None, None
+
+    z_coeffs = _short_pad_resultant_coefficients(e, c1, c2)
+    coeffs_mod_n = [coefficient % n for coefficient in z_coeffs]
+
+    f = Polynomial(coeffs_mod_n, n)
+    try:
+        f = f.monic()
+    except ValueError:
+        return None, None
+        
+    # Theoretical bound: delta < N^(1/e^2). For z = delta^e, the search bound
+    # for Coppersmith univariate LLL is X_z = N^(2 / (e * (e + 1))).
+    exp_denom = (e * (e + 1)) // 2
+    X_z = max(iroot(n, exp_denom)[0], 1)
+        
+    params = CoppersmithParameters(beta=1.0, X=X_z)
+    roots = coppersmith_univariate(f, n, params)
+    
+    for z_val in roots:
+        delta, exact = iroot(z_val, e)
+        if exact:
+            m_tuple = franklin_reiter(n, e, c1, c2, 1, int(delta))
+            if m_tuple is not None:
+                m1, m2 = m_tuple
+                return m1, m2
+            
+    return None, None
+
+def partial_p(n, p_high, unknown_bits=None):
+    """
+    Coppersmith Factoring with high bits of p known.
+    Given N = p * q, p_high (the known high bits of p), and unknown_bits (the number
+    of unknown low bits of p), recovers p if unknown_bits <= N^0.25 (~25% of N's bit length).
+
+    Args:
+        n: RSA modulus N.
+        p_high: High bits of p (shifted so low unknown_bits are 0).
+        unknown_bits: Number of unknown lower bits of p (if None, inferred from p_high trailing zeros).
+
+    Returns:
+        (p, q) tuple if recovered, else (None, None).
+    """
+    if unknown_bits is None:
+        k = (p_high & -p_high).bit_length() - 1 if p_high > 0 else 0
+        unknown_bits = k if k > 0 else (n.bit_length() // 4)
+    n_bits = n.bit_length()
+    max_unknown_bits = (n_bits // 4) + 2
+    if unknown_bits > max_unknown_bits:
+        raise ValueError(
+            f"unknown_bits ({unknown_bits}) exceeds theoretical Coppersmith bound of ~N^0.25 ({n_bits // 4} bits)"
+        )
+
+    f = Polynomial([p_high, 1], n)
+    X = 1 << unknown_bits
+
+    # For divisor p, use beta = 0.49 to ensure Coppersmith's condition holds
+    params = CoppersmithParameters(beta=0.49, X=X)
+    roots = coppersmith_univariate(f, n, params)
+
+    for root in roots:
+        p_cand = p_high + root
+        if p_cand > 1 and n % p_cand == 0:
+            return p_cand, n // p_cand
+
+    return None, None
+
+def lattice_partial_p(n, near_p):
+    """
+    Coppersmith Factoring with an approximation of p.
+    Sweeps bounds exponentially up to Coppersmith's theoretical bound X <= N^(beta^2).
+    According to Howgrave-Graham / Coppersmith theorem, a small root x modulo a divisor
+    b >= N^beta can be found when |x| <= X <= N^(beta^2). In bit length, this corresponds to
+    log2(X) <= beta^2 * log2(N).
+    """
+
+    n, near_p = int(n), int(near_p)
+
+    g = gcd(n, near_p)
+    if 1 < g < n:
+        return g, n // g
+
+    n_bits = n.bit_length()
+    p_bits = near_p.bit_length()
+
+    raw_beta = (p_bits - 1) / n_bits
+    if raw_beta <= 0 or raw_beta >= 1:
+        return None, None
+
+    # Using beta = 0.49 (or raw_beta if lower) ensures Coppersmith's divisor bound
+    # b >= N^beta holds even if the targeted prime factor is slightly below N^0.5.
+    beta = min(raw_beta, 0.49)
+
+    # Coppersmith bound: X <= N^(beta^2) => log2(X) <= beta^2 * log2(N)
+    max_bits = max(int(beta * beta * n_bits), 1)
+
+    f = Polynomial([near_p, 1], n)
+    bits = min(32, max_bits)
+
+    while True:
+        X = 1 << bits
+        params = CoppersmithParameters(beta=beta, X=X)
+        try:
+            roots = coppersmith_univariate(f, n, params)
+            for r in roots:
+                p_cand = near_p + r
+                if p_cand > 1 and n % p_cand == 0:
+                    return p_cand, n // p_cand
+        except CoppersmithError as exc:
+            if "Sage" in str(exc):
+                raise
+            # Infeasible bound or no parameters satisfying bound within max_m: break early
+            break
+
+        if bits >= max_bits:
+            break
+        bits = min(bits * 2, max_bits)
+
+    return None, None
+
+def small_fraction(n):
+    """
+    Finds a factor of N when p/q is close to a small fraction num/den (num < den).
+    Sweeps through small fractions num/den and tests if q is near sqrt(N * den / num).
+    Uses exact integer arithmetic isqrt(n * den // num) to avoid floating-point overflow on large N.
+    The hint approximates the larger factor q (assuming q > p).
+    """
+
+    depth = 50
+    for den in range(2, depth + 1):
+        for num in range(1, den):
+            if gcd(num, den) == 1:
+                phint = isqrt(n * den // num)
+                p, q = lattice_partial_p(n, phint)
+                if p is not None and q is not None:
+                    return p, q
+
+    return None, None
+
+def partial_d(n, e, dLow, known_bits=None):
+    """
+    Coppersmith Factoring with partial d (low bits of d known).
+    Recovers p and q from N, e, and the known lower bits of d.
+
+    Args:
+        n: RSA modulus N.
+        e: Public exponent e.
+        dLow: Known lower bits of d.
+        known_bits: Explicit number of known low bits in dLow (preserves leading zero bits).
+                    If None, defaults to dLow.bit_length().
+    """
+    if known_bits is None:
+        lowerBitsNum = dLow.bit_length()
+    else:
+        lowerBitsNum = int(known_bits)
+
+    def hensel_lift(a, b, c, bits, max_roots=256):
+        """
+        Solve a*X^2 + b*X + c == 0 (mod 2^bits) using Hensel's lemma lifting.
+        Caps the number of roots per level to max_roots (default 256) to prevent exponential blow-up.
+        """
+        roots = [r for r in range(2) if (a * r * r + b * r + c) % 2 == 0]
+        for k in range(1, bits):
+            mod = 1 << k
+            next_mod = mod << 1
+            new_roots = []
+            for r in roots:
+                for delta in (0, mod):
+                    candidate = r + delta
+                    val = a * candidate * candidate + b * candidate + c
+                    if val % next_mod == 0:
+                        new_roots.append(candidate)
+            if len(new_roots) > max_roots:
+                new_roots = new_roots[:max_roots]
+            roots = new_roots
+        mod_final = 1 << bits
+        return [r % mod_final for r in roots]
+
+    def find_p_coppersmith(n, p_low, l_bits):
+        l = 1 << l_bits
+        try:
+            l_inv = pow(l, -1, n)
+        except ValueError:
+            return None
+
+        f = Polynomial([(p_low * l_inv) % n, 1], n)
+
+        n_bits = n.bit_length()
+        lo = max((n_bits >> 1) - l_bits, 4)
+        hi = min(n_bits - l_bits, (n_bits * 19) // 100)
+        hi = max(hi, lo)
+
+        bounds = list(range(lo, hi + 1, 8))
+        if not bounds or bounds[-1] != hi:
+            bounds.append(hi)
+
+        for ubits in bounds:
+            X = 1 << ubits
+            params = CoppersmithParameters(beta=0.49, X=X)
+            try:
+                roots = coppersmith_univariate(f, n, params)
+                for root in roots:
+                    p_cand = gcd(l * root + p_low, n)
+                    if 1 < p_cand < n:
+                        return p_cand
+            except CoppersmithError as exc:
+                if "Sage" in str(exc):
+                    raise
+        return None
+
+    # k is bounded to 1..min(e-1, 1000) to prevent infeasible loops when e is large (e.g. e=65537).
+    max_k = min(e, 1000)
+
+    for k in range(1, max_k):
+        a = k
+        b = e * dLow - k * (n + 1) - 1
+        c = k * n
+
+        for pLow in hensel_lift(a, b, c, lowerBitsNum):
+            p = find_p_coppersmith(n, pLow, lowerBitsNum)
+            if p is not None:
+                return p, n // p
+
+    return None, None
+
+

@@ -1,0 +1,9 @@
+# Optional pip packages enabling extra attack modules
+wolframalpha
+pytest
+
+# The following are NOT pip-installable and must be installed with the
+# system package manager (or built from source):
+#   - sagemath  (sage: lattice/QS/ECM helper scripts)
+#   - yafu      (SIQS attack)
+#   - neca      (neca attack binary)

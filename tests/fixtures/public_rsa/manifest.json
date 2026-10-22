@@ -1,0 +1,275 @@
+{
+  "version": 1,
+  "source": "Frozen public CTF RSA corpus: CryptoHack catalogue plus fixed official CTF archives",
+  "catalogue_url": "https://cryptohack.org/challenges/rsa/",
+  "frozen_at": "2026-10-21",
+  "track": "offline_one_paste",
+  "cases": [
+    {
+      "id": "inferius",
+      "file": "inferius.txt",
+      "family": "small_factorization",
+      "attack": "local_yafu_complete_factorization",
+      "expected_sha256": "6159913df0fc8b08cca8f1818c52fa429fc35d9fa7833086e409f6d7b0b5410e",
+      "timeout_s": 180,
+      "input_sha256": "1e6106677ac14a7928995f9de056e51180f08452f2d12c66e69860a2e3b30053",
+      "split": "verified"
+    },
+    {
+      "id": "monoprime",
+      "file": "monoprime.txt",
+      "family": "prime_modulus",
+      "attack": "prime_modulus",
+      "expected_sha256": "155bc7a914ad57c9a2838d088a7fe704fc4bc7c0ffa8d1477367be2c160ccb60",
+      "timeout_s": 60,
+      "input_sha256": "992ce80ef136a691e6b408012b2ce5f4d4280b5f19b7514b154e1580c5448cd0",
+      "split": "verified"
+    },
+    {
+      "id": "square",
+      "file": "square.txt",
+      "family": "prime_power_modulus",
+      "attack": "prime_power_modulus",
+      "expected_sha256": "2340ea0973f3fe5acbc57e5fd267556229d911f0ecbf34a79780cf880aaafdd1",
+      "timeout_s": 60,
+      "input_sha256": "8a3834582d981a8bd1f3023076dcad6e5d497bf6fd51582f2765ffd540c99b59",
+      "split": "verified"
+    },
+    {
+      "id": "manyprime",
+      "file": "manyprime.txt",
+      "family": "many_prime_factorization",
+      "attack": "local_yafu_complete_factorization",
+      "expected_sha256": "ae61647a2b38f00f135a27e58130780eacc46d1e73fdacedc2f5c34318bc9101",
+      "timeout_s": 180,
+      "input_sha256": "78932b93e6bbb96d135ce2dc66c4540d4e7584b05fa4620f8bbed22b61833edb",
+      "split": "verified"
+    },
+    {
+      "id": "salty",
+      "file": "salty.txt",
+      "family": "e_one",
+      "attack": "identity_exponent_e1",
+      "expected_sha256": "9e7450cd8d8147e0b01d7300571139e33793be4052d991bdf600666b47bc7d12",
+      "timeout_s": 60,
+      "input_sha256": "39adebeba78d446a1b1a1e4929d525cb8da6049331f12c8e1a5560b6fbe7891e",
+      "split": "verified"
+    },
+    {
+      "id": "modulus_inutilis",
+      "file": "modulus_inutilis.txt",
+      "family": "low_exponent_no_wrap",
+      "attack": "direct_low_exponent_root",
+      "expected_sha256": "e7732d0ec528708ca0c75a3e3bc50d0737904d49118c5102a65348024f0991e7",
+      "timeout_s": 60,
+      "input_sha256": "8beec7339e9574a7ef95bd6a052a6b98d044f3499194063a70461b7c54937089",
+      "split": "verified"
+    },
+    {
+      "id": "big",
+      "file": "big.txt",
+      "family": "wiener_small_d",
+      "attack": "wiener_small_private_exponent",
+      "expected_sha256": "d5cf66b9396fa6aff99c3e84d6c7ba3b37e72f6309374e4baf3f71aa4d20fa3e",
+      "timeout_s": 60,
+      "input_sha256": "be14f91b494d56991d628e56728aed62e859d377e9180c66e204ccf41cc498b1",
+      "split": "verified"
+    },
+    {
+      "id": "wires",
+      "file": "wires.txt",
+      "family": "same_modulus_exponent_chain",
+      "attack": "same_modulus_exponent_chain_known_d",
+      "expected_sha256": "474dabb2dd0d899bc83c6815d7de9aa11f340930602a7f864dd3d54c9b7dd698",
+      "timeout_s": 60,
+      "input_sha256": "bada546b6518dc6761cdd012ac86761d1fa4b9e62df5ff66605bb1d6c891b630",
+      "split": "verified"
+    },
+    {
+      "id": "big2",
+      "file": "big2.txt",
+      "family": "boneh_durfee_small_d",
+      "attack": "boneh_durfee_small_private_exponent",
+      "expected_sha256": "56ac49019b61b072ed14db813ea8703cb8c141fb6e40b34f62897f02864f6fea",
+      "timeout_s": 180,
+      "input_sha256": "852b67c236d1cfee76d1fdfa8c4bf7a6668400be404f54c496d521607ff6f3a8",
+      "split": "verified"
+    },
+    {
+      "id": "johan",
+      "file": "johan.txt",
+      "family": "hastad_broadcast",
+      "attack": "hastad_broadcast",
+      "expected_sha256": "ae2837422b96f5ddbec864681ed280ad843ffd39ef98e9c487d03a64cca81805",
+      "timeout_s": 60,
+      "input_sha256": "86063e4e4fc07f63a8d00e790562ebfd15cdcb94d13550352f213857f61776ca",
+      "split": "verified"
+    },
+    {
+      "id": "descent",
+      "file": "descent.txt",
+      "family": "close_primes",
+      "attack": "fermat_close_primes",
+      "expected_sha256": "37c61a41dfd81b75bc11c0aa051614ebb5bea6b17932297cac51d88a0b02d51f",
+      "timeout_s": 60,
+      "input_sha256": "ca8563c824d7d6064f17ca5759c79f377ddd255ac480ee23759dca0f98387d5b",
+      "split": "verified"
+    },
+    {
+      "id": "marin",
+      "file": "marin.txt",
+      "family": "mersenne_like_primes",
+      "attack": "mersenne_product_structure",
+      "expected_sha256": "e1f27aa8743aba8404c64b08b80584d511fb3d0562ed92f9f8351a70f51622b2",
+      "timeout_s": 60,
+      "input_sha256": "b3f88b4a9cefd8f76940dccc8d6dee712a0689864b4956d7d1039f0d60d8ac4c",
+      "split": "verified"
+    },
+    {
+      "id": "null_padding",
+      "file": "null_padding.txt",
+      "family": "known_trailing_padding",
+      "attack": "trailing_null_padding_low_exponent",
+      "expected_sha256": "90fe73ddb935564e6c0cd3280e6a45c70d3953735c5e265844ccca185d9cb69f",
+      "timeout_s": 60,
+      "input_sha256": "3cea0a763e940d6303eadaea288ca30c4562ed1397b025c08772bcbdbc7c497e",
+      "split": "verified"
+    },
+    {
+      "id": "fast_primes",
+      "file": "fast_primes.txt",
+      "family": "roca_primorial",
+      "attack": "roca_structured_prime",
+      "expected_sha256": "be2c5b38ab871dacd323a9cb16f2945855ee97a5f5ee4e1c919fd07f12d200be",
+      "timeout_s": 180,
+      "input_sha256": "4bf87b67e31a584c8237b4b8cba819994c1e709103cf4a950d2aa140c2d8a219",
+      "split": "verified"
+    },
+    {
+      "id": "ron_was_wrong",
+      "file": "ron_was_wrong.txt",
+      "family": "shared_prime_oaep",
+      "attack": "shared_prime_gcd",
+      "expected_sha256": "8c4cf9156270ca29fbc2749aeb329b4c3b0a128a9de71a9843245c5c56ceea46",
+      "timeout_s": 180,
+      "input_sha256": "09f0ec3c06a5b1fcb7a58a70f232e22fbda9856084c3cd1e10da9491161f981e",
+      "split": "verified"
+    },
+    {
+      "id": "duc2020_babyrsa",
+      "file": "babyrsa.txt",
+      "family": "euler_exponent_linear_leak",
+      "attack": "euler_exponent_linear_leak",
+      "expected_sha256": "c10ccfc481a8277ac642cceb76a2c5281dd3590e1d153a6f359a7fe6478714cd",
+      "timeout_s": 60,
+      "source": "https://github.com/DownUnderCTF/Challenges_2020_public/tree/d1553cd8d7ef8711150fa99d02379c011cffb428/crypto/babyrsa",
+      "input_sha256": "368fea015b00b42055e91e8082b5de1b4306db45811aea0671f15ec6eb2a1a85",
+      "split": "verified"
+    },
+    {
+      "id": "duc2023_apbq_rsa_i",
+      "file": "apbq-rsa-i.txt",
+      "family": "apbq_small_coefficient_leak",
+      "attack": "apbq_small_coefficient_leak",
+      "expected_sha256": "92b999d0c72e88be164983730af06065837e025bcb32811fdcd3792bac43bf47",
+      "timeout_s": 120,
+      "source": "https://github.com/DownUnderCTF/Challenges_2023_Public/tree/b48f83db2984bc7fa2ec7879a32d7efb1be8d333/crypto/apbq-rsa-i",
+      "input_sha256": "f97923b98390d383ce4b5211366efd1e79c4b4fe5252013f116bc560125a2a6a",
+      "split": "verified"
+    },
+    {
+      "id": "duc2023_apbq_rsa_ii",
+      "file": "apbq-rsa-ii.txt",
+      "family": "apbq_lll_leak",
+      "attack": "apbq_lll_leak",
+      "expected_sha256": "de440de606e004d0cb2d237b7f3306c6d35954d6c640ddf3dcfa4d2af40fded0",
+      "timeout_s": 120,
+      "source": "https://github.com/DownUnderCTF/Challenges_2023_Public/tree/b48f83db2984bc7fa2ec7879a32d7efb1be8d333/crypto/apbq-rsa-ii",
+      "input_sha256": "ccd381cdb466e023ce8a8a6d56e2b9ef98997337ddae0b3f95ee3e026622824d",
+      "split": "verified"
+    },
+    {
+      "id": "seccon2017_ps_and_qs",
+      "file": "seccon_psqs.txt",
+      "family": "shared_prime_pkcs1_v15",
+      "attack": "shared_prime_gcd",
+      "expected_sha256": "34848cffd707a8549feea23133e2589a530a45769fa5c8fd2e8e4c28ba532d21",
+      "timeout_s": 180,
+      "source": "https://github.com/SECCON/SECCON2017_online_CTF/tree/0a8bbd28544fbd89bed0f0e3eafa7b09a0165a6b/crypto/200_Ps%20and%20Qs",
+      "input_sha256": "6b5c3b0fc5a8f23682e28662e8cdb21cb8f194df015084b12b18e2983615b21d",
+      "split": "verified"
+    },
+    {
+      "id": "google_ctf_2023_lcg",
+      "file": "google_lcg.txt",
+      "subdir": ".",
+      "family": "lcg_generated_multiprime",
+      "attack": "lcg_recovered_multiprime",
+      "timeout_s": 180,
+      "source": "https://github.com/google/google-ctf/tree/HEAD/2023/quals/crypto-lcg",
+      "expected_sha256": "69981daf9abdebef789ff622d1672c37c6a1e97737415369dc77a4ba6360fd96",
+      "input_sha256": "5f9d1ceb884ef0c656d7397250deaf243e34cb9dd67bdf961075fca9c1a2bb52",
+      "split": "verified"
+    },
+    {
+      "id": "pico2021_mini_rsa",
+      "file": "pico2021_mini_rsa.txt",
+      "subdir": "pico",
+      "family": "low_exponent_wrapped",
+      "expected_sha256": "b271d80ac6d772b5e48cc560cf5d5b68eefe732f06aff80ced0d9b16649cd035",
+      "timeout_s": 180,
+      "source": "https://raw.githubusercontent.com/Kevinrobot34/ctf/90e109930fe45026c856694b7d3fd40f1ed8fad4/picoctf/crypto/mini_rsa.py",
+      "input_sha256": "203a2f567909f1b2e4f69e4c4baa337e7d90e01c681892296f2dae80702bc054",
+      "split": "verified",
+      "attack": "wrapped_low_exponent_root"
+    },
+    {
+      "id": "pico2021_psqs",
+      "file": "pico2021_psqs.txt",
+      "subdir": "pico",
+      "family": "small_factorization",
+      "expected_sha256": "ec24fab7a20e4cb21e5c1f18b85d12ce267d073d50fba6d8b9c57daea8000262",
+      "timeout_s": 180,
+      "source": "https://raw.githubusercontent.com/Kevinrobot34/ctf/90e109930fe45026c856694b7d3fd40f1ed8fad4/picoctf/crypto/mind_your_ps_and_qs.py",
+      "input_sha256": "502d13f7f8fbb3103ca2229ceeeae5dae6fb133efb00d9196bd4ee047e5bc874",
+      "split": "development",
+      "attack": null
+    },
+    {
+      "id": "pico2022_smooth",
+      "file": "pico2022_smooth.txt",
+      "subdir": "pico",
+      "family": "smooth_p_minus_one",
+      "expected_sha256": "7266c5a4b081dc5450c30558a4d8da276160223eaceaa553a95bb27c275215b6",
+      "timeout_s": 180,
+      "source": "https://raw.githubusercontent.com/Connor-McCartney/Connor-McCartney.github.io/dc92d8a204201c7ad42f8c2b120ab4fbb4618f63/_pages/cryptography/rsa/very-smooth-picoCTF-2022.md",
+      "input_sha256": "5cd4398e0db2ea3e4213a2750fa5f9f0cae650bfff2b747e653f4c476ab89610",
+      "split": "development",
+      "attack": null
+    },
+    {
+      "id": "pico2019_bootleg3",
+      "file": "pico2019_bootleg3.txt",
+      "subdir": "pico",
+      "family": "many_prime_factorization",
+      "expected_sha256": "a6ed3f57ef4f1ef822bc1eb40351484900178797e0f413480a998dee72290c09",
+      "timeout_s": 180,
+      "source": "https://raw.githubusercontent.com/Kevinrobot34/ctf/d4a1118da8430282a1f4ae21b425e98b03afbfe9/picoctf/crypto/b00tl3gRSA3.py",
+      "input_sha256": "bf098d70c80fa5895c39a3d2bc9308eb497b76a5b329d8255712497e4ee8273a",
+      "split": "verified",
+      "attack": "local_yafu_complete_factorization"
+    },
+    {
+      "id": "pico2022_sum",
+      "file": "pico2022_sum.txt",
+      "subdir": "pico",
+      "source": "https://raw.githubusercontent.com/iaohkut/PicoCTF/91343b1c8d0a92bfff5321d6e51cf6974f12651d/Cryptography/Sum-O-Primes",
+      "family": "prime_sum_leak",
+      "attack": "prime_sum_leak",
+      "expected_sha256": "1075f2ef8cae4c114e624b7e6d397d89a9181a584e64a7ec21891529f17e1201",
+      "timeout_s": 180,
+      "split": "verified",
+      "input_sha256": "70ac193f290ade3420c2cf3b18806ab8a72e1d4b4db238fb65a8aea5be43d119"
+    }
+  ]
+}

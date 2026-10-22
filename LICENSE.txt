@@ -1,0 +1,16 @@
+RSAkiller license notices
+
+This repository is a fork of RsaCtfTool and contains upstream material with
+multiple license and copyright notices. No blanket relicensing of upstream
+material is asserted by this fork.
+
+For files whose headers state MIT License, the MIT terms in those headers apply.
+Other upstream files may carry different terms (including the beerware notice
+in src/RsaCtfTool/main.py). Read the notice in each file before copying,
+modifying, or redistributing it. The upstream changelog and contributor history
+are retained for attribution.
+
+New RSAkiller-specific additions should be treated under the terms stated in
+their file headers or accompanying documentation. Contact the relevant
+copyright holders if you need clarification on rights to redistribute a
+particular file.

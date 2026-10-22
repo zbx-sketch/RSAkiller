@@ -1,0 +1,130 @@
+import sys
+import traceback
+from pathlib import Path
+
+from sage.all import Integer, PolynomialRing, Zmod, floor, inverse_mod
+
+script_path = Path(sys.argv[0]).resolve()
+if not (script_path.parent / "sage_functions.py").is_file():
+    script_path = Path(__file__).resolve()
+script_dir = str(script_path.parent)
+src_dir = str(script_path.parents[2]) if len(script_path.parents) >= 3 else script_dir
+if script_dir not in sys.path:
+    sys.path.insert(0, script_dir)
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
+
+
+def _solve_args(args):
+    return solve(*args)
+
+
+def solve(M, n, a, m, XX, invmod_Mn, F, x, beta, sage_dir, src_dir):
+    # I need to import it in the function otherwise multiprocessing doesn't find it in its context
+    if sage_dir not in sys.path:
+        sys.path.insert(0, sage_dir)
+    if src_dir not in sys.path:
+        sys.path.insert(0, src_dir)
+
+    from RsaCtfTool.lib.coppersmith import CoppersmithParameters
+    from RsaCtfTool.sage.coppersmith import coppersmith_univariate_sage
+
+    base = 65537
+    # the known part of p: 65537^a * M^-1 (mod N)
+    known = int(pow(base, a, M) * invmod_Mn)
+    pol = x + known
+    t = m + 1
+    # Find a small root (x0 = k) using Coppersmith's algorithm
+    # Explicit (m, t): ROCA relies on empirically tuned lattices that the
+    # generic determinant-bound selector would reject (beta = 0.1).
+    parameters = CoppersmithParameters(beta=beta, X=XX, m=m, t=t)
+    roots = coppersmith_univariate_sage(pol, n, parameters)
+    # There will be no roots for an incorrect guess of a.
+    for k in roots:
+        # reconstruct p from the recovered k
+        p = int(k * M + pow(base, a, M))
+        if n % p == 0:
+            return p, n // p
+
+
+def roca(n):
+    keySize = n.bit_length()
+
+    if keySize <= 960:
+        M_prime = 0x1B3E6C9433A7735FA5FC479FFE4027E13BEA
+        m = 5
+
+    elif 992 <= keySize <= 1952:
+        M_prime = (
+            0x24683144F41188C2B1D6A217F81F12888E4E6513C43F3F60E72AF8BD9728807483425D1E
+        )
+        m = 4
+        print("Have you several days/months to spend on this ?")
+
+    elif 1984 <= keySize <= 3936:
+        M_prime = 0x16928DC3E47B44DAF289A60E80E1FC6BD7648D7EF60D1890F3E0A9455EFE0ABDB7A748131413CEBD2E36A76A355C1B664BE462E115AC330F9C13344F8F3D1034A02C23396E6
+        m = 7
+        print("You'll change computer before this scripts ends...")
+
+    elif 3968 <= keySize <= 4096:
+        print("Just no.")
+        return None
+
+    else:
+        print(f"Invalid key size: {keySize}")
+        return None
+
+    beta = 0.1
+    a3 = Zmod(M_prime)(n).log(65537)
+    order = Zmod(M_prime)(65537).multiplicative_order()
+    inf = a3 >> 1
+    sup = (a3 + order) >> 1
+    # Upper bound for the small root x0. Integer sqrt: the previous
+    # float-based n**0.5 overflows for n >= 2**1024, silently failing
+    # every key in the 992-1952 bit ROCA tiers.
+    XX = floor(2 * Integer(n).sqrt() / M_prime)
+    invmod_Mn = inverse_mod(M_prime, n)
+    # Create the polynom f(x)
+    F = PolynomialRing(Zmod(n), implementation="NTL", names=("x",))
+    (x,) = F._first_ngens(1)
+    # Search 10 000 values at a time, using multiprocess
+    # too big chunks is slower, too small chunks also
+    chunk_size = 10000
+    for inf_a in range(inf, sup, chunk_size):
+        inputs = [
+            (M_prime, n, a, m, XX, invmod_Mn, F, x, beta, script_dir, src_dir)
+            for a in range(inf_a, inf_a + chunk_size)
+        ]
+        # We use multiprocessing.get_context("fork") locally instead of calling
+        # multiprocessing.set_start_method("fork", force=True) globally.
+        # Sage CLI subprocesses fail under spawn/forkserver during process
+        # bootstrapping when attempting to re-import __main__.
+        import multiprocessing
+        from multiprocessing import cpu_count
+
+        ctx = multiprocessing.get_context("fork")
+        with ctx.Pool(cpu_count()) as pool:
+            for val in pool.imap_unordered(_solve_args, inputs, chunksize=100):
+                if val:
+                    p, q = val
+                    print(f"{p}:{q}")
+                    return val
+    return "Fail"
+
+
+if __name__ in {"__main__", "sage.all"}:
+    """
+    # Test values
+    p = 80688738291820833650844741016523373313635060001251156496219948915457811770063
+    q = 69288134094572876629045028069371975574660226148748274586674507084213286357069
+    n = p * q
+    n = 5590772118685579117817112787486780348504267507289026685912623973671010394384988015497235515969796783937905129055952167826830196634107346761087047942625347
+    """
+    # a = 176170, interval = [171312, 771912]
+    n = int(sys.argv[1])
+    # For the test values chosen, a is quite close to the minimal value so the search is not too long
+    try:
+        roca(n)
+    except Exception:
+        traceback.print_exc(file=sys.stderr)
+        print("FAIL")

@@ -1,0 +1,10 @@
+# Keep in sync with [project] dependencies in pyproject.toml
+cryptography>=39
+urllib3>=1.26
+requests>=2.25
+gmpy2>=2.1.15
+pycryptodome>=3.10
+tqdm
+z3-solver
+psutil>=5.9
+factordb-pycli
